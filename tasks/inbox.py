@@ -40,6 +40,7 @@ class ClassifiedNote:
     area: str
     todo_text: str
     media_type: str
+    media_title: str     # rzeczywisty tytuł medium (może różnić się od nazwy pliku)
     media_desc: str
     idea_title: str
     confidence: str      # high | low
@@ -163,16 +164,25 @@ Odpowiedz TYLKO jako JSON:
 
 
 def lookup_media(title: str, content: str) -> dict:
-    prompt = f"""Czy "{title}" (treść: "{content}") to tytuł filmu, książki, serialu lub gry?
+    prompt = f"""Przeanalizuj notatkę i sprawdź czy zawiera tytuł filmu, książki, serialu lub gry.
 
-Jeśli tak — podaj krótki opis (max 10 słów, gatunek + ocena IMDB jeśli znana).
-Jeśli nie — zwróć is_media: false.
+Notatka (tytuł pliku): "{title}"
+Treść: "{content}"
+
+Treść może zaczynać się od prefiksu typu "film ", "książka ", "gra ", "serial " —
+jeśli tak, prefiks wskazuje typ, a reszta to tytuł medium.
+Np. treść "film hoppers" → media_type=film, media_title=Hoppers.
+
+Jeśli to film lub serial — podaj gatunek i ocenę IMDB jeśli ją znasz (format: "Gatunek | ⭐ X.X/10 IMDB").
+Jeśli to książka lub gra — podaj tylko gatunek, bez oceny IMDB.
+Jeśli nie rozpoznajesz — zwróć is_media: false.
 
 Odpowiedz TYLKO jako JSON:
 {{
   "is_media": true,
   "media_type": "film|książka|serial|gra|inne",
-  "description": "krótki opis np. 'thriller sci-fi, IMDB 7.8' lub ''"
+  "media_title": "rozpoznany tytuł medium, np. 'Hoppers (2026)'",
+  "description": "gatunek i ocena, np. 'Animacja, Sci-Fi | ⭐ 7.7/10 IMDB' lub ''"
 }}"""
 
     response = client.chat.completions.create(
@@ -194,7 +204,7 @@ def classify_all(notes: list[Path]) -> list[ClassifiedNote]:
             results.append(ClassifiedNote(
                 path=path, title=title, content=content,
                 action="delete", area="", todo_text="",
-                media_type="", media_desc="", idea_title="",
+                media_type="", media_title="", media_desc="", idea_title="",
                 confidence="high"
             ))
             continue
@@ -203,7 +213,7 @@ def classify_all(notes: list[Path]) -> list[ClassifiedNote]:
             results.append(ClassifiedNote(
                 path=path, title=title, content=title,
                 action="idea", area="", todo_text="",
-                media_type="", media_desc="", idea_title=title,
+                media_type="", media_title="", media_desc="", idea_title=title,
                 confidence="high"
             ))
             continue
@@ -214,11 +224,14 @@ def classify_all(notes: list[Path]) -> list[ClassifiedNote]:
         media_type = ""
         media_desc = ""
 
+        media_title = ""
+
         if action == "media" or data.get("confidence") == "low":
             media_data = lookup_media(title, content)
             if media_data.get("is_media"):
                 action = "media"
                 media_type = media_data.get("media_type", "inne")
+                media_title = media_data.get("media_title", "") or title
                 media_desc = media_data.get("description", "")
             elif action == "media":
                 action = "idea"
@@ -234,6 +247,7 @@ def classify_all(notes: list[Path]) -> list[ClassifiedNote]:
             area=data.get("area", ""),
             todo_text=data.get("todo_text", "") or content,
             media_type=media_type,
+            media_title=media_title,
             media_desc=media_desc,
             idea_title=data.get("idea_title", "") or title,
             confidence=data.get("confidence", "high"),
@@ -290,15 +304,16 @@ def apply_media(note: ClassifiedNote):
     mtype = note.media_type.lower()
 
     section_map = {
-        "film":    "## Filmy",
-        "serial":  "## Filmy",
-        "książka": "## Książki",
-        "gra":     "## Gry",
+        "film":    "**Filmy**",
+        "serial":  "**Filmy**",
+        "książka": "**Książki**",
+        "gra":     "**Gry**",
     }
-    section = section_map.get(mtype, "## Inne")
+    section = section_map.get(mtype, "**Inne**")
 
+    display_title = note.media_title or note.title
     desc = f" — {note.media_desc}" if note.media_desc else ""
-    new_entry = f"- {note.title}{desc}"
+    new_entry = f"- {display_title}{desc}"
 
     if section in content:
         content = content.replace(section, f"{section}\n{new_entry}", 1)
@@ -307,7 +322,7 @@ def apply_media(note: ClassifiedNote):
 
     media_file.write_text(content, encoding="utf-8")
     note.path.unlink()
-    print(f"     🎬 Media [{note.media_type}]: {note.title}{desc}")
+    print(f"     🎬 Media [{note.media_type}]: {display_title}{desc}")
 
 
 # ── Główna funkcja ────────────────────────────────────────────────────────────

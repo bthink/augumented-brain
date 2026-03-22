@@ -26,6 +26,7 @@ alwaysApply: true
 | `agent/skills/` | Composable skille + rejestr w `agent/skills/__init__.py` |
 | `sub_agents/` | Konkretni agenci: `inbox_agent`, `todo_agent`, `youtube_agent`, `research_agent` |
 | `tasks/` | Istniejący silnik (inbox, todo, …) wywoływany przez agentów |
+| `tasks/web_utils.py` | Wspólne HTTP helpers: `search_web`, `read_webpage`, `fetch_page` (DuckDuckGo) |
 
 **Struktura vaultu (PARA):** `00_System` … `97_Inbox`, `98_Templates`, `99_Archive` — szczegóły w `docs/architecture.md`.
 

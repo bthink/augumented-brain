@@ -21,7 +21,8 @@ from pathlib import Path
 from openai import OpenAI
 
 from agent.base_agent import BaseAgent, AgentResult
-from config import VAULT_PATH, AREAS
+from config import MEDIA_FILE, VAULT_PATH, AREAS
+from tasks.web_utils import search_web as _search_web_fn, read_webpage as _read_webpage_fn
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,76 @@ INBOX_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "save_to_watchlist",
+            "description": (
+                "Dodaje film/książkę/grę/serial do notatki 'Do obejrzenia i przeczytania'. "
+                "Używaj po zidentyfikowaniu notatki jako media. "
+                "Dla filmów i seriali: pobierz ocenę IMDB i gatunek przez search_web, "
+                "podaj jako description np. 'Animacja, Sci-Fi | ⭐ 7.7/10 IMDB'. "
+                "Dla książek i gier: podaj tylko gatunek bez oceny IMDB."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Tytuł medium, np. 'Hoppers (2026)'",
+                    },
+                    "media_type": {
+                        "type": "string",
+                        "description": "Typ: film | serial | książka | gra | inne",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Gatunek i ocena, np. 'Animacja, Sci-Fi | ⭐ 7.7/10 IMDB'",
+                    },
+                },
+                "required": ["title", "media_type"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_web",
+            "description": (
+                "Wyszukuje w sieci przez DuckDuckGo. "
+                "Używaj do pobrania oceny IMDB i gatunku dla filmów/seriali. "
+                "Przykładowe zapytanie: 'Hoppers 2026 film IMDB rating genre'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Fraza do wyszukania"},
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maksymalna liczba wyników, domyślnie 5",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_webpage",
+            "description": (
+                "Pobiera stronę i zwraca jej treść. "
+                "Używaj po search_web żeby uzyskać szczegółowe dane (np. ze strony IMDB)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "Pełny URL strony do przeczytania"},
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "ask_user",
             "description": "Zadaje użytkownikowi pytanie i czeka na odpowiedź. Używaj tylko gdy classification confidence < 0.6.",
             "parameters": {
@@ -138,6 +209,16 @@ class InboxAgent(BaseAgent):
                 )
             case "delete_note":
                 return self._delete_note(tool_args["filename"], tool_args["reason"])
+            case "save_to_watchlist":
+                return self._save_to_watchlist(
+                    tool_args["title"],
+                    tool_args["media_type"],
+                    tool_args.get("description", ""),
+                )
+            case "search_web":
+                return _search_web_fn(tool_args["query"], tool_args.get("max_results", 5))
+            case "read_webpage":
+                return _read_webpage_fn(tool_args["url"])
             case "ask_user":
                 return self.ask_user(tool_args["question"])
             case _:
@@ -148,11 +229,17 @@ class InboxAgent(BaseAgent):
         if not task:
             task = (
                 f"Przejrzyj wszystkie notatki w 97_Inbox/. Dla każdej:\n"
-                f"1. Przeczytaj zawartość\n"
-                f"2. Jeśli pusta lub bez wartości — usuń\n"
-                f"3. Klasyfikuj do odpowiedniego folderu PARA\n"
-                f"4. Przenieś (chyba że dry_run=True — wtedy tylko zaraportuj co byś zrobił)\n"
-                f"5. Na końcu podsumuj co zrobiłeś\n\n"
+                f"1. Przeczytaj zawartość.\n"
+                f"2. Jeśli pusta lub bez wartości — usuń (delete_note).\n"
+                f"3. Sprawdź czy to notatka medialna — treść zaczyna się od 'film ', 'serial ',\n"
+                f"   'książka ', 'gra ', lub jest wyraźnym tytułem do obejrzenia/przeczytania:\n"
+                f"   a. Jeśli film lub serial — wyszukaj ocenę IMDB i gatunek przez search_web,\n"
+                f"      np. '[tytuł] IMDB rating genre'. Przeczytaj wynik przez read_webpage jeśli potrzeba.\n"
+                f"      Dla książek i gier NIE szukaj IMDB — podaj tylko gatunek jeśli go znasz.\n"
+                f"   b. Wywołaj save_to_watchlist z tytułem, typem i opisem.\n"
+                f"   c. Usuń notatkę (delete_note).\n"
+                f"4. Dla pozostałych notatek — klasyfikuj do folderu PARA i przenieś (move_note).\n"
+                f"5. Na końcu podsumuj co zrobiłeś.\n\n"
                 f"dry_run={self.dry_run}. Obszary: {', '.join(AREAS)}"
             )
         return super().run(task)
@@ -231,6 +318,45 @@ class InboxAgent(BaseAgent):
         path.unlink()
         self.actions_taken.append({**action, "status": "done"})
         return f"Usunięto '{filename}'"
+
+    def _save_to_watchlist(self, title: str, media_type: str, description: str = "") -> str:
+        if not MEDIA_FILE.exists():
+            return f"BŁĄD: Nie znaleziono pliku watchlisty '{MEDIA_FILE}'"
+
+        section_map = {
+            "film":    "**Filmy**",
+            "serial":  "**Filmy**",
+            "książka": "**Książki**",
+            "gra":     "**Gry**",
+        }
+        section = section_map.get(media_type.lower(), "**Inne**")
+        desc = f" — {description}" if description else ""
+        new_entry = f"- {title}{desc}\n"
+
+        action = {
+            "action": "watchlist",
+            "title": title,
+            "media_type": media_type,
+            "section": section,
+        }
+
+        if self.dry_run:
+            self.actions_taken.append({**action, "status": "dry_run"})
+            return f"[DRY RUN] Dodałbym '{title}' do sekcji {section}"
+
+        try:
+            content = MEDIA_FILE.read_text(encoding="utf-8")
+            if section in content:
+                content = content.replace(section, f"{section}\n{new_entry}", 1)
+            else:
+                content += f"\n{section}\n{new_entry}\n"
+            MEDIA_FILE.write_text(content, encoding="utf-8")
+        except OSError as e:
+            logger.error("Błąd zapisu watchlisty: %s", e)
+            return f"BŁĄD: Nie udało się zapisać do watchlisty: {e}"
+
+        self.actions_taken.append({**action, "status": "done"})
+        return f"Dodano '{title}' do sekcji {section} w 'Do obejrzenia i przeczytania'"
 
     def _obsidian_move(self, source: Path, target: Path) -> bool:
         """Próbuje przenieść przez Obsidian CLI, fallback na os.rename."""
