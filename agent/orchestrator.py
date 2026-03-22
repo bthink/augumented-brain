@@ -13,6 +13,7 @@ import logging
 from openai import OpenAI
 
 from sub_agents.inbox_agent import InboxAgent
+from sub_agents.todo_agent import TodoAgent
 from config import OPENAI_API_KEY, OPENAI_MODEL
 
 logger = logging.getLogger(__name__)
@@ -105,9 +106,8 @@ class Orchestrator:
                 agent = InboxAgent(client=self.client, dry_run=self.dry_run)
                 return agent.run()
             case "todo":
-                # TODO: TodoAgent (Faza 2)
-                from agent.base_agent import AgentResult
-                return AgentResult(False, "TodoAgent jeszcze nie zaimplementowany jako sub-agent")
+                agent = TodoAgent(client=self.client, dry_run=self.dry_run)
+                return agent.run(task)
             case _:
                 from agent.base_agent import AgentResult
                 return AgentResult(False, f"Nieznany agent: {agent_name}")

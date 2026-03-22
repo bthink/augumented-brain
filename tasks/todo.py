@@ -238,6 +238,62 @@ def process_todo(dry_run: bool = True, todo_path: Path = TODO_FILE) -> None:
     print(f"\n✅ TODO zapisane: {todo_path}")
 
 
+# ── Operacje atomowe ─────────────────────────────────────────────────────────
+
+def add_task(text: str, todo_path: Path = TODO_FILE) -> bool:
+    """Dopisuje nowe zadanie na końcu aktywnych (przed sekcją ## Zrobione)."""
+    if not todo_path.exists():
+        return False
+
+    content = todo_path.read_text(encoding="utf-8")
+    active_block, done_block = split_sections(content)
+
+    new_line = f"\n- [ ] {text.strip()}"
+    new_content = active_block.rstrip() + new_line + "\n"
+    if done_block:
+        new_content += "\n" + done_block
+
+    todo_path.write_text(new_content, encoding="utf-8")
+    return True
+
+
+def complete_task_by_text(query: str, todo_path: Path = TODO_FILE) -> tuple[list[str], int]:
+    """
+    Oznacza zadanie pasujące do query jako ukończone ([x] + data).
+
+    Returns:
+        (matched_tasks, count_marked) — lista pasujących tekstów i ile faktycznie oznaczono.
+        Jeśli matched_tasks ma > 1 element, oznaczenie NIE następuje (agent pyta użytkownika).
+    """
+    if not todo_path.exists():
+        return [], 0
+
+    content = todo_path.read_text(encoding="utf-8")
+    tasks = parse_tasks(content)
+    active = [t for t in tasks if not t.done]
+
+    query_lower = query.lower()
+    matches = [t for t in active if query_lower in t.text.lower()]
+
+    if len(matches) != 1:
+        return [t.text for t in matches], 0
+
+    today = date.today().isoformat()
+    target_text = matches[0].text
+
+    def replace_task(m: re.Match) -> str:
+        done_flag = m.group(1)
+        text_body = m.group(2).strip()
+        clean = DONE_DATE_RE.sub("", text_body).strip()
+        if done_flag == " " and clean == target_text:
+            return f"- [x] {clean} ✓ {today}"
+        return m.group(0)
+
+    new_content = TASK_RE.sub(replace_task, content)
+    todo_path.write_text(new_content, encoding="utf-8")
+    return [target_text], 1
+
+
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
