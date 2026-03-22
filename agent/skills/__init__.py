@@ -8,6 +8,7 @@ Agent dostaje listę nazw skilli → loader składa je w jeden kontekst.
 from agent.skills.clarifier import SKILL as CLARIFIER
 from agent.skills.para_classifier import SKILL as PARA_CLASSIFIER
 from agent.skills.time_estimator import SKILL as TIME_ESTIMATOR
+from agent.skills.yt_transcript import SKILL as YT_TRANSCRIPT
 
 # Rejestr wszystkich dostępnych skilli
 # Dodaj tu nowy skill po jego stworzeniu
@@ -15,6 +16,7 @@ REGISTRY: dict[str, dict] = {
     "clarifier": CLARIFIER,
     "para_classifier": PARA_CLASSIFIER,
     "time_estimator": TIME_ESTIMATOR,
+    "yt_transcript": YT_TRANSCRIPT,
 }
 
 

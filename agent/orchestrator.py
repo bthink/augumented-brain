@@ -14,6 +14,7 @@ from openai import OpenAI
 
 from sub_agents.inbox_agent import InboxAgent
 from sub_agents.todo_agent import TodoAgent
+from sub_agents.youtube_agent import YoutubeAgent
 from config import OPENAI_API_KEY, OPENAI_MODEL
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 AGENT_DESCRIPTIONS = {
     "inbox": "Przetwarza notatki z 97_Inbox/ — klasyfikuje i przenosi do PARA",
     "todo": "Organizuje zadania w TODO.md — grupuje i czyści ukończone",
+    "youtube": "Pobiera transkrypcję filmu z YouTube i tworzy notatkę w 03_Knowledge vaultu",
     "research": "Prowadzi research na podany temat — łączy vault z internetem [wkrótce]",
     "orphans": "Znajduje notatki bez linków — kandydaci do archiwum [wkrótce]",
 }
@@ -107,6 +109,9 @@ class Orchestrator:
                 return agent.run()
             case "todo":
                 agent = TodoAgent(client=self.client, dry_run=self.dry_run)
+                return agent.run(task)
+            case "youtube":
+                agent = YoutubeAgent(client=self.client, dry_run=self.dry_run)
                 return agent.run(task)
             case _:
                 from agent.base_agent import AgentResult
