@@ -46,6 +46,7 @@ AREAS = ["AI", "Money", "Photography", "Portfolio", "Praca"]
 # Foldery odzwierciedlają aktualną strukturę 03_Knowledge z vaultu.
 KNOWLEDGE_FOLDERS = ["IT", "YT_summaries", "Zdrowie"]
 YT_SUMMARIES_SUBFOLDER = "YT_summaries"
+RESEARCH_NOTES_SUBFOLDER = "Research"
 
 # Kategoria semantyczna -> (realny podfolder w 03_Knowledge, tytuł notatki hub)
 # Model wybiera kategorię, a config mapuje ją na faktyczny folder w vaultcie.

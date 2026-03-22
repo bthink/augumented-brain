@@ -13,6 +13,7 @@ import logging
 from openai import OpenAI
 
 from sub_agents.inbox_agent import InboxAgent
+from sub_agents.research_agent import ResearchAgent
 from sub_agents.todo_agent import TodoAgent
 from sub_agents.youtube_agent import YoutubeAgent
 from config import OPENAI_API_KEY, OPENAI_MODEL
@@ -26,7 +27,7 @@ AGENT_DESCRIPTIONS = {
     "todo": "Organizuje zadania w TODO.md — grupuje i czyści ukończone",
     "youtube": "Transkrypcja YouTube i zapis notatki w 03_Knowledge. "
     "Także: przeniesienie lub zmiana kategorii istniejącej notatki YT już w 03_Knowledge (np. zła kategoria/podfolder).",
-    "research": "Prowadzi research na podany temat — łączy vault z internetem [wkrótce]",
+    "research": "Prowadzi research na podany temat - łączy vault z internetem i zapisuje notatkę researchową",
     "orphans": "Znajduje notatki bez linków — kandydaci do archiwum [wkrótce]",
 }
 
@@ -86,7 +87,7 @@ class Orchestrator:
                         "w 03_Knowledge (np. po filmie YT, zła kategoria) — użyj youtube, NIE inbox. "
                         "inbox tylko gdy chodzi o pliki w 97_Inbox.\n"
                         "Odpowiedz TYLKO nazwami, np: inbox,todo\n"
-                        "Jeśli agent jest oznaczony [wkrótce] — nie używaj go, "
+                        "Jeśli agent jest oznaczony [wkrótce] - nie używaj go, "
                         "zamiast tego napisz: UNAVAILABLE"
                     ),
                 },
@@ -117,6 +118,9 @@ class Orchestrator:
                 return agent.run(task)
             case "youtube":
                 agent = YoutubeAgent(client=self.client, dry_run=self.dry_run)
+                return agent.run(task)
+            case "research":
+                agent = ResearchAgent(client=self.client, dry_run=self.dry_run)
                 return agent.run(task)
             case _:
                 from agent.base_agent import AgentResult

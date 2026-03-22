@@ -68,7 +68,7 @@ Bf-vault/
   clarifier              pytania doprecyzowujące
   time_estimator         priorytety TODO  (wkrótce)
   yt_transcript          transkrypcje YouTube → notatka
-  web_analyst            analiza webowa   (wkrótce)
+  web_analyst            analiza webowa i synteza źródeł
       │
       ▼
 [ Tasks ]                tasks/  ← istniejący kod, bez zmian
@@ -110,13 +110,13 @@ augumented-brain/
 │       ├── para_classifier.py # ✅ klasyfikacja do PARA z confidence score
 │       ├── time_estimator.py  # ✅ priorytety dla TODO
 │       ├── yt_transcript.py   # ✅ transkrypcje YouTube → notatka w vaulcie
-│       └── web_analyst.py     # 🔲 analiza i synteza webowa
+│       └── web_analyst.py     # ✅ analiza i synteza źródeł webowych
 │
 ├── sub_agents/
 │   ├── inbox_agent.py        # ✅ klasyfikuje i przenosi notatki z Inbox
 │   ├── todo_agent.py         # ✅ opakowuje tasks/todo.py
 │   ├── youtube_agent.py      # ✅ YT → notatka; folder + hub wg YT_KNOWLEDGE_BY_CATEGORY (config)
-│   └── research_agent.py     # 🔲 Faza 3 — vault + internet
+│   └── research_agent.py     # ✅ research: vault + internet + zapis notatki
 │
 └── tasks/                    # istniejący kod silnika — sub-agenty go wywołują
     ├── todo.py               # ✅ parsuje i grupuje TODO.md
@@ -131,7 +131,7 @@ augumented-brain/
 
 ## Jak działają skille
 
-Skill to composowalny blok instrukcji — paczka trzech rzeczy:
+Skill to composowalny blok instrukcji - paczka trzech rzeczy:
 
 ```python
 SKILL = {
@@ -144,10 +144,32 @@ SKILL = {
 
 Agent przy inicjalizacji deklaruje listę skilli. Loader (`skills/__init__.py`) składa je w jeden system prompt. Instrukcje mogą zawierać `{AREAS}` i inne placeholdery z kontekstu sesji.
 
-**Rejestr skilli** — żeby dodać nowy skill:
+**Rejestr skilli** - żeby dodać nowy skill:
 1. Utwórz `agent/skills/nazwa.py` ze słownikiem `SKILL`
 2. Dodaj import i wpis do `REGISTRY` w `agent/skills/__init__.py`
 3. Dodaj nazwę do `SKILLS = [...]` w sub-agencie który go potrzebuje
+
+### `web_analyst`
+
+Skill `web_analyst` jest już dostępny w rejestrze skilli i daje agentowi reguły syntezy researchu z internetu:
+- preferencja dla źródeł pierwotnych
+- rozdzielenie faktów od interpretacji
+- jawne oznaczanie sprzeczności i luk
+- wynik w formacie gotowym do zapisania jako notatka Markdown
+
+Skill sam nie pobiera stron - robi to `ResearchAgent`, który dostarcza mu narzędzia do wyszukiwania, odczytu źródeł, przeglądu vaultu i zapisu notatek.
+
+### `ResearchAgent`
+
+`ResearchAgent` używa skilli `clarifier` i `web_analyst`. Jego standardowy przepływ:
+1. ocenia, czy wystarczy wiedza modelu
+2. opcjonalnie sprawdza podobne notatki przez `search_vault`
+3. opcjonalnie zbiera wyniki przez `search_web`
+4. opcjonalnie czyta wybrane strony przez `read_webpage`
+5. syntetyzuje wnioski według zasad `web_analyst`
+6. zapisuje wynik do `03_Knowledge/Research` przez `save_research_note`
+
+Implementacja nie wymaga dodatkowych bibliotek HTTP - agent korzysta ze standardowej biblioteki Pythona.
 
 ---
 
