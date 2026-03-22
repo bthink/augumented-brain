@@ -56,9 +56,9 @@ Bf-vault/
       ▼
 [ Orchestrator ]          agent/orchestrator.py
       │  routuje do sub-agentów, zbiera wyniki
-      ├──────────────────┬──────────────────┐
-      ▼                  ▼                  ▼
-[ InboxAgent ]    [ TodoAgent ]    [ ResearchAgent ]   ← sub_agents/
+      ├──────────────────┬──────────────────┬──────────────────┐
+      ▼                  ▼                  ▼                  ▼
+[ InboxAgent ]    [ TodoAgent ]    [ YoutubeAgent ]  [ ResearchAgent ]   ← sub_agents/
       │                  │                  │
       │    każdy sub-agent komponuje swoje skille
       │                  │
@@ -67,6 +67,7 @@ Bf-vault/
   para_classifier        klasyfikacja do PARA
   clarifier              pytania doprecyzowujące
   time_estimator         priorytety TODO  (wkrótce)
+  yt_transcript          transkrypcje YouTube → notatka
   web_analyst            analiza webowa   (wkrótce)
       │
       ▼
@@ -107,12 +108,14 @@ augumented-brain/
 │       ├── __init__.py       # rejestr skilli + loader
 │       ├── clarifier.py      # ✅ zadaje max 2 pytania przed akcją
 │       ├── para_classifier.py # ✅ klasyfikacja do PARA z confidence score
-│       ├── time_estimator.py  # 🔲 priorytety dla TODO
+│       ├── time_estimator.py  # ✅ priorytety dla TODO
+│       ├── yt_transcript.py   # ✅ transkrypcje YouTube → notatka w vaulcie
 │       └── web_analyst.py     # 🔲 analiza i synteza webowa
 │
 ├── sub_agents/
 │   ├── inbox_agent.py        # ✅ klasyfikuje i przenosi notatki z Inbox
-│   ├── todo_agent.py         # 🔲 opakowuje tasks/todo.py
+│   ├── todo_agent.py         # ✅ opakowuje tasks/todo.py
+│   ├── youtube_agent.py      # ✅ pobiera transkrypcję YT i tworzy notatkę w 03_Knowledge
 │   └── research_agent.py     # 🔲 Faza 3 — vault + internet
 │
 └── tasks/                    # istniejący kod silnika — sub-agenty go wywołują
@@ -272,7 +275,8 @@ Fundament systemu. Pętla ReAct, composowalne skille, pierwsze sub-agenty.
 - [x] `InboxAgent` — pierwszy działający sub-agent
 - [x] `Orchestrator` — router komend
 - [x] Migracja z `obsidian-manager/` do nowej struktury — `tasks/inbox.py` i `tasks/todo.py` przeniesione, `config.py` scalony (dodano `OPENAI_API_KEY` i `FOLDERS`)
-- [ ] `TodoAgent` — opakowanie tasks/todo.py
+- [x] `TodoAgent` — opakowanie tasks/todo.py
+- [x] `YoutubeAgent` + skill `yt_transcript` — transkrypcja YT → notatka w 03_Knowledge
 - [ ] Testy na żywych danych, dostrojenie promptów
 
 ### Faza 2 — RAG (kiedy zajdzie potrzeba)
@@ -301,7 +305,7 @@ Każde to nowy sub-agent lub rozszerzenie istniejącego.
 
 - [ ] OCR — skanowanie dokumentów → notatka w vaulcie
 - [ ] Mailing — digest z vaultu na email
-- [ ] `media.py` — integracja z narzędziem YT (ID: `d80ba065-4999-4bf4-a962-7a2142f14da6`)
+- [ ] `media.py` — dalsza integracja mediów (YoutubeAgent już obsługuje YT)
 - [ ] `proofread.py` jako sub-agent z wyborem obszaru
 - [ ] Integracja LM Studio (`qwen2.5-14b-instruct`) jako fallback offline
 
