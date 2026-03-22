@@ -20,7 +20,7 @@ Bf-vault/
 ├── 00_System/          → TODO.md i pliki systemowe
 ├── 01_Projects/        → projekty z deadlinem i konkretnym wynikiem
 ├── 02_Areas/           → obszary życia bez końca (AI, Money, Photography, Portfolio, Praca)
-├── 03_Knowledge/       → materiał referencyjny
+├── 03_Knowledge/       → materiał referencyjny (m.in. podfoldery wg tematu — zob. poniżej „YouTube”)
 ├── 04_Ideas/           → luźne pomysły, rzeczy do obejrzenia/przeczytania
 ├── 97_Inbox/           → surowe notatki z telefonu — tu trafia wszystko
 ├── 98_Templates/       → szablony notatek
@@ -115,7 +115,7 @@ augumented-brain/
 ├── sub_agents/
 │   ├── inbox_agent.py        # ✅ klasyfikuje i przenosi notatki z Inbox
 │   ├── todo_agent.py         # ✅ opakowuje tasks/todo.py
-│   ├── youtube_agent.py      # ✅ pobiera transkrypcję YT i tworzy notatkę w 03_Knowledge
+│   ├── youtube_agent.py      # ✅ YT → notatka; folder + hub wg YT_KNOWLEDGE_BY_CATEGORY (config)
 │   └── research_agent.py     # 🔲 Faza 3 — vault + internet
 │
 └── tasks/                    # istniejący kod silnika — sub-agenty go wywołują
@@ -148,6 +148,29 @@ Agent przy inicjalizacji deklaruje listę skilli. Loader (`skills/__init__.py`) 
 1. Utwórz `agent/skills/nazwa.py` ze słownikiem `SKILL`
 2. Dodaj import i wpis do `REGISTRY` w `agent/skills/__init__.py`
 3. Dodaj nazwę do `SKILLS = [...]` w sub-agencie który go potrzebuje
+
+---
+
+## Transkrypcje YouTube → notatka (`YoutubeAgent`, skill `yt_transcript`)
+
+`YoutubeAgent` (`sub_agents/youtube_agent.py`) pobiera transkrypcję przez `youtube-transcript-api` (narzędzie `get_yt_transcript`); model wybiera **jedną kategorię** treści. Zapis notatki (`save_note`) jest spójny z konfiguracją — folder docelowy i **wikilink do notatki hub** nie są zgadywane ad hoc przez model, tylko wynikają z mapy w `config.py`.
+
+**Źródło prawdy:** `YT_KNOWLEDGE_BY_CATEGORY` w `config.py` — dla każdej kategorii para `(podfolder względem 03_Knowledge, tytuł notatki hub)`. Z pliku `.md` powstaje m.in. frontmatter `category: …` oraz linia `[[tytuł hubu]]` (tytuł musi odpowiadać nazwie notatki w Obsidianie; jeśli w vaultcie używasz innych nazw hubów, zmień drugi element pary w mapie).
+
+**Domyślne mapowanie kategorii** (skrót):
+
+| Kategoria   | Podfolder w `03_Knowledge` | Hub (przykład)   |
+|-------------|----------------------------|------------------|
+| ai          | `IT`                       | `[[IT]]`         |
+| it          | `IT`                       | `[[IT]]`         |
+| zdrowie     | `Zdrowie`                  | `[[Zdrowie]]`    |
+| inne        | `YT_summaries`             | `[[Yt summaries]]` |
+
+Lista dozwolonych kategorii: `YT_CATEGORIES` (klucze `YT_KNOWLEDGE_BY_CATEGORY`). Podfoldery są tworzone przy zapisie, jeśli nie istnieją.
+
+**Nadpisanie ścieżki:** parametr `folder` w `save_note` jest **opcjonalny** — używany tylko gdy użytkownik wyraźnie prosi o inny podfolder niż wynika z kategorii (pojedynczy segment nazwy, bez `..` i ścieżek).
+
+Implementacja skilla: `agent/skills/yt_transcript.py`.
 
 ---
 
@@ -276,7 +299,7 @@ Fundament systemu. Pętla ReAct, composowalne skille, pierwsze sub-agenty.
 - [x] `Orchestrator` — router komend
 - [x] Migracja z `obsidian-manager/` do nowej struktury — `tasks/inbox.py` i `tasks/todo.py` przeniesione, `config.py` scalony (dodano `OPENAI_API_KEY` i `FOLDERS`)
 - [x] `TodoAgent` — opakowanie tasks/todo.py
-- [x] `YoutubeAgent` + skill `yt_transcript` — transkrypcja YT → notatka w 03_Knowledge
+- [x] `YoutubeAgent` + skill `yt_transcript` — transkrypcja YT → notatka w `03_Knowledge` (podfolder i `[[hub]]` z `YT_KNOWLEDGE_BY_CATEGORY`)
 - [ ] Testy na żywych danych, dostrojenie promptów
 
 ### Faza 2 — RAG (kiedy zajdzie potrzeba)

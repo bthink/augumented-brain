@@ -1,5 +1,5 @@
 """
-config.py — centralna konfiguracja Augmented Brain
+config.py - centralna konfiguracja Augmented Brain
 """
 
 from pathlib import Path
@@ -39,4 +39,22 @@ TODO_QUICK_MAX_MINUTES = 15
 OPENAI_MODEL = "gpt-4o-mini"
 
 # ── Obszary ──────────────────────────────────────────────────────────────────
+# Tylko realne podfoldery w 02_Areas. "Obszary.md" jest notatką hub, nie kategorią.
 AREAS = ["AI", "Money", "Photography", "Portfolio", "Praca"]
+
+# ── Knowledge / YouTube ──────────────────────────────────────────────────────
+# Foldery odzwierciedlają aktualną strukturę 03_Knowledge z vaultu.
+KNOWLEDGE_FOLDERS = ["IT", "YT_summaries", "Zdrowie"]
+YT_SUMMARIES_SUBFOLDER = "YT_summaries"
+
+# Kategoria semantyczna -> (realny podfolder w 03_Knowledge, tytuł notatki hub)
+# Model wybiera kategorię, a config mapuje ją na faktyczny folder w vaultcie.
+YT_KNOWLEDGE_BY_CATEGORY: dict[str, tuple[str, str]] = {
+    "ai": ("IT", "IT"),
+    "it": ("IT", "IT"),
+    "zdrowie": ("Zdrowie", "Zdrowie"),
+    "inne": (YT_SUMMARIES_SUBFOLDER, "Yt summaries"),
+}
+
+YT_CATEGORIES = tuple(YT_KNOWLEDGE_BY_CATEGORY.keys())
+YT_CATEGORY_LABELS = ", ".join(YT_CATEGORIES)

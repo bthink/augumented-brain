@@ -149,9 +149,17 @@ SKILL: dict = {
         "   - źródło (URL filmu)\n"
         "   - streszczenie w punktach\n"
         "   - kluczowe wnioski / cytaty\n"
-        "3. ZAWSZE wywołaj save_note żeby zapisać notatkę do vaultu — nie pytaj, po prostu zapisz\n"
-        "4. Jeśli transkrypcje są wyłączone lub niedostępne — poinformuj użytkownika\n\n"
-        "Nie wyświetlaj tylko tekstu — każda sesja z filmem kończy się zapisaną notatką."
+        "3. Wybierz jedną kategorię treści z listy: {YT_CATEGORIES}. "
+        "System sam wybierze właściwy podfolder w 03_Knowledge i odpowiedni link hubu.\n"
+        "4. ZAWSZE wywołaj save_note żeby zapisać notatkę do vaultu - nie pytaj, po prostu zapisz.\n"
+        "   Pole folder używaj tylko gdy użytkownik wyraźnie chce inną ścieżkę niż wynika z kategorii.\n"
+        "   W polu content podaj treść bez YAML frontmatter (dodaje go system: category + wikilink hubu).\n"
+        "5. Jeśli transkrypcje są wyłączone lub niedostępne - poinformuj użytkownika\n\n"
+        "Jeśli użytkownik chce przenieść lub zmienić kategorię notatki już zapisanej w 03_Knowledge "
+        "(np. zła kategoria przy zapisie): użyj read_knowledge_note (opcjonalnie) i relocate_yt_note "
+        "ze ścieżką względem 03_Knowledge oraz nową kategorią; dla treści poza mapowaniem (np. fotografia) "
+        "możesz użyć kategorii 'inne' i parametru folder z jednym segmentem (np. Photography).\n\n"
+        "Nie wyświetlaj tylko tekstu - każda sesja z filmem kończy się zapisaną notatką."
     ),
     "tools": YT_TRANSCRIPT_TOOLS,
     "output_format": "Transkrypcja lub streszczenie w języku polskim. Cytaty z transkrypcji jako bloki kodu.",

@@ -21,9 +21,11 @@ logger = logging.getLogger(__name__)
 
 # Mapa komend → sub-agentów (rozszerz gdy dodajesz nowe)
 AGENT_DESCRIPTIONS = {
-    "inbox": "Przetwarza notatki z 97_Inbox/ — klasyfikuje i przenosi do PARA",
+    "inbox": "WYŁĄCZNIE pliki w 97_Inbox/ — klasyfikacja PARA i przeniesienie stamtąd. "
+    "Nie używaj, gdy chodzi o notatkę już w 03_Knowledge lub innym folderze niż Inbox.",
     "todo": "Organizuje zadania w TODO.md — grupuje i czyści ukończone",
-    "youtube": "Pobiera transkrypcję filmu z YouTube i tworzy notatkę w 03_Knowledge vaultu",
+    "youtube": "Transkrypcja YouTube i zapis notatki w 03_Knowledge. "
+    "Także: przeniesienie lub zmiana kategorii istniejącej notatki YT już w 03_Knowledge (np. zła kategoria/podfolder).",
     "research": "Prowadzi research na podany temat — łączy vault z internetem [wkrótce]",
     "orphans": "Znajduje notatki bez linków — kandydaci do archiwum [wkrótce]",
 }
@@ -80,6 +82,9 @@ class Orchestrator:
                         "Jesteś routerem komend. Na podstawie polecenia użytkownika "
                         "zwróć TYLKO listę nazw agentów do wywołania, oddzielonych przecinkami.\n"
                         f"Dostępne agenty:\n{descriptions}\n\n"
+                        "Zasady: jeśli użytkownik chce przenieść/poprawić notatkę już zapisaną "
+                        "w 03_Knowledge (np. po filmie YT, zła kategoria) — użyj youtube, NIE inbox. "
+                        "inbox tylko gdy chodzi o pliki w 97_Inbox.\n"
                         "Odpowiedz TYLKO nazwami, np: inbox,todo\n"
                         "Jeśli agent jest oznaczony [wkrótce] — nie używaj go, "
                         "zamiast tego napisz: UNAVAILABLE"
