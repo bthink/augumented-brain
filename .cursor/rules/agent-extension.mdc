@@ -1,0 +1,19 @@
+---
+description: Jak dodawać funkcje — skille, narzędzia, sub-agenci (bez ruszania pętli ReAct)
+globs: agent/**/*.py, sub_agents/**/*.py, tasks/**/*.py
+alwaysApply: false
+---
+
+# Rozszerzanie agentów
+
+**Zasada:** nowe możliwości **nie** dodajesz przez modyfikację pętli w `BaseAgent` / `base_agent.py`. Rozszerzaj przez skille, narzędzia (`get_tools()` w sub-agencie) i ewentualnie nowego sub-agenta.
+
+**Skill:** moduł w `agent/skills/` ze słownikiem `SKILL` (`name`, `instructions`, `tools`, opcjonalnie `output_format`). Placeholdery typu `{AREAS}` — patrz loader w `agent/skills/__init__.py`.
+
+**Rejestr:** nowy skill → import + wpis w `REGISTRY` w `agent/skills/__init__.py` + nazwa w `SKILLS = [...]` używającego sub-agenta.
+
+**Sub-agent:** klasa dziedzicząca `BaseAgent`, nadpisuje `SKILLS`, `get_tools()`, ewentualnie `MAX_ITERATIONS`. Orchestrator łączy komendy użytkownika z odpowiednim sub-agentem.
+
+**Tasks (`tasks/`):** istniejący kod silnika; sub-agenty go wywołują. Nowe zachowanie biznesowe częściej w skillu/toolu niż duplikacja logiki między `tasks/` a agentem — dopasuj do istniejącego stylu pliku.
+
+**Obsługa błędów:** jawne komunikaty, logowanie (`logging`); unikaj pustych `except` i cichego połykania wyjątków przy operacjach na plikach/API.

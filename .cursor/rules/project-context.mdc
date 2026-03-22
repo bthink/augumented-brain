@@ -1,0 +1,34 @@
+---
+description: Kontekst Augmented Brain — cel, stack, ścieżki, dokumentacja
+alwaysApply: true
+---
+
+# Augmented Brain — kontekst projektu
+
+**Czym jest:** osobisty system AI do zarządzania wiedzą w Obsidianie (vault PARA). Działa z terminala (interaktywnie lub cron); operuje na plikach `.md` w vaulcie (np. iCloud).
+
+**Cel:** vault, który sam się organizuje — inbox, TODO, research zapisany jako notatki.
+
+**Stack:** Python 3.13, OpenAI API (`gpt-4o-mini` w `config.OPENAI_MODEL`), `python-dotenv`, `youtube-transcript-api`, `yt-dlp`. Uruchamianie: **`python3`** (nie `python`). RAG (chromadb) — plan Fazy 2, jeszcze nie wdrożony.
+
+**Konfiguracja:** `config.py` ładuje `.env`. Wymagane: `VAULT_PATH`. Typowo: `OPENAI_API_KEY`. **Nie commituj `.env`.**
+
+**Źródło prawdy o architekturze:** `docs/architecture.md`. Gdy zmieniasz architekturę w kodzie, zaktualizuj w parze: `docs/architecture.md` oraz ten plik (`.cursor/rules/project-context.mdc`); szczegółowa zasada jest w `.cursor/rules/cursorrules.mdc` (sekcja Architektura).
+
+**Ważne ścieżki kodu:**
+
+| Ścieżka | Rola |
+|---------|------|
+| `main.py` | Punkt wejścia (interaktywny, `--auto`, `--dry-run`, `--legacy`) |
+| `config.py` | `VAULT_PATH`, `FOLDERS` (PARA), `AREAS`, model; YouTube: `YT_KNOWLEDGE_BY_CATEGORY`, `YT_CATEGORIES`, `YT_SUMMARIES_SUBFOLDER` |
+| `agent/orchestrator.py` | Router komend do sub-agentów |
+| `agent/base_agent.py` | Pętla ReAct — **nie rozszerzaj jej „na skróty” nowymi feature’ami** |
+| `agent/skills/` | Composable skille + rejestr w `agent/skills/__init__.py` |
+| `sub_agents/` | Konkretni agenci: `inbox_agent`, `todo_agent`, `youtube_agent` |
+| `tasks/` | Istniejący silnik (inbox, todo, …) wywoływany przez agentów |
+
+**Struktura vaultu (PARA):** `00_System` … `97_Inbox`, `98_Templates`, `99_Archive` — szczegóły w `docs/architecture.md`.
+
+**YouTube → notatka:** `YoutubeAgent` + skill `yt_transcript`. Kategoria treści wybierana przez model mapuje się w kodzie na realny podfolder w `03_Knowledge` i wikilink do hubu (`YT_KNOWLEDGE_BY_CATEGORY` w `config.py`). Aktualne foldery wiedzy używane przez mapowanie to `IT`, `YT_summaries` i `Zdrowie`; „inne” trafia do `YT_summaries` + `[[Yt summaries]]`. Opcjonalne `folder` w `save_note` tylko gdy użytkownik chce inną ścieżkę niż z kategorii. Pełny opis: `docs/architecture.md` (sekcja „Transkrypcje YouTube”).
+
+**Przenoszenie plików w vaultcie:** preferuj Obsidian CLI (`obsidian move`), żeby zaktualizować wikilinki; fallback w kodzie jeśli CLI niedostępne.

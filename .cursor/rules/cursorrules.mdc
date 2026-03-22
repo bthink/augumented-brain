@@ -1,0 +1,213 @@
+---
+description: general rules
+globs: agent/**/*.py, sub_agents/**/*.py, tasks/**/*.py
+alwaysApply: true
+---
+
+# Augmented Brain — Cursor Rules
+
+## Kontekst projektu
+
+Osobisty system AI do zarządzania wiedzą w Obsidianie (vault PARA).
+Repozytorium: `bthink/augumented-brain`
+Dokumentacja architektury: `docs/architecture.md` — czytaj przed każdą większą zmianą.
+
+## Stack
+
+- Python 3.13, OpenAI API (`gpt-4o-mini`), python-dotenv
+- Brak LangGraph, brak frameworków agentowych — zwykły Python
+- Brak frontendu, brak JS
+
+---
+
+## Struktura projektu — gdzie co mieszka
+
+```
+agent/base_agent.py        # pętla ReAct — NIGDY nie modyfikuj bez wyraźnego powodu
+agent/orchestrator.py      # router komend do sub-agentów
+agent/skills/              # composowalne bloki instrukcji dla agentów
+sub_agents/                # konkretne agenty dziedziczące BaseAgent
+tasks/                     # silnik operacji na vaulcie — funkcje bez agentów
+config.py                  # jedyne miejsce na stałe i ścieżki
+main.py                    # punkt wejścia, tylko orkiestracja
+docs/architecture.md       # źródło prawdy o architekturze
+```
+
+---
+
+## Zasady których zawsze przestrzegaj
+
+### Architektura
+
+- **Zmiana architektury → dokumentacja i kontekst.** Po każdej zmianie w architekturze (nowy agent, skill, przepływ, konwencje modułów) w tej samej sesji pracy uaktualnij: `docs/architecture.md` (pełny opis) oraz `.cursor/rules/project-context.mdc` (skrót dla AI). Bez tego dokumentacja i reguły rozjadą się z kodem.
+- **Nowy feature = nowy tool lub nowy skill.** Nigdy nie rozbudowuj `base_agent.py` o logikę domenową.
+- **`base_agent.py` jest nietykalny** — zmieniaj go tylko gdy zmienia się mechanika pętli ReAct, nigdy dla konkretnego zadania.
+- **Sub-agent dziedziczy `BaseAgent`**, deklaruje `SKILLS`, implementuje `get_tools()` i `execute_tool()`. Nic więcej.
+- **`tasks/` to silnik** — czyste funkcje operujące na plikach, zero logiki agentowej, zero wywołań OpenAI poza klasyfikacją.
+- **Każdy sub-agent ma `dry_run: bool`** — domyślnie `True`. Nigdy nie zapisuj do vaultu bez jawnego `dry_run=False`.
+
+### Dodawanie skilla
+
+1. Utwórz `agent/skills/nazwa.py` ze słownikiem `SKILL = {"name", "instructions", "tools", "output_format"}`
+2. Zarejestruj w `agent/skills/__init__.py` → `REGISTRY`
+3. Dodaj nazwę do `SKILLS = [...]` w sub-agencie
+
+### Dodawanie sub-agenta
+
+1. Utwórz `sub_agents/nazwa_agent.py` dziedziczący `BaseAgent`
+2. Zadeklaruj `SKILLS`, `MAX_ITERATIONS`, `MODEL`
+3. Zaimplementuj `get_tools()` → lista tool schema w formacie OpenAI
+4. Zaimplementuj `execute_tool()` → `match tool_name: case ...`
+5. Zarejestruj w `agent/orchestrator.py` → `AGENT_DESCRIPTIONS` i `_run_agent()`
+
+### Operacje na plikach vaultu
+
+- **Przenoszenie plików** → zawsze przez `InboxAgent._obsidian_move()` (Obsidian CLI → fallback os.rename). Nigdy `shutil.move()` — sypie wikilinki.
+- **Czytanie i edycja treści** → Python bezpośrednio (`Path.read_text`, `Path.write_text`)
+- **Ścieżki** → zawsze przez `config.VAULT_PATH / config.FOLDERS["nazwa"]`, nigdy hardkodowane stringi
+
+### Konfiguracja
+
+- Wszystkie stałe i ścieżki żyją w `config.py` — nigdy inline w kodzie
+- Sekrety (`OPENAI_API_KEY`, `VAULT_PATH`) tylko przez `.env` + `python-dotenv`
+- `.env` nigdy nie trafia do commita
+
+---
+
+## Konwencje kodu
+
+### Nazewnictwo
+
+```python
+# Pliki
+tasks/todo.py              # snake_case
+sub_agents/inbox_agent.py  # snake_case + sufiks _agent
+agent/skills/para_classifier.py
+
+# Klasy
+class InboxAgent(BaseAgent): ...   # PascalCase + sufiks Agent
+class AgentResult: ...
+
+# Funkcje w tasks/
+def process_todo(...): ...         # snake_case, czasownik
+def classify_and_preview(...): ... # snake_case
+
+# Stałe
+OPENAI_MODEL = "gpt-4o-mini"      # SCREAMING_SNAKE_CASE
+```
+
+### Tool schema (OpenAI function calling)
+
+```python
+# Zawsze pełny opis — agent podejmuje decyzje na podstawie description
+{
+    "type": "function",
+    "function": {
+        "name": "move_note",
+        "description": "Przenosi notatkę z Inbox do docelowego folderu PARA. Aktualizuje wikilinki.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "filename": {"type": "string", "description": "Nazwa pliku, np. 'Bez nazwy 6.md'"},
+                "target_folder": {"type": "string", "description": "Folder względem vaultu, np. '02_Areas/AI'"},
+            },
+            "required": ["filename", "target_folder"],
+        },
+    },
+}
+```
+
+### Wywołania OpenAI
+
+```python
+# Zawsze przez self.client w sub-agencie (przekazywany z orchestratora)
+# Nigdy nie twórz nowego OpenAI() w tasks/ — tam client jest już zainicjowany na górze pliku
+# temperature=0 dla klasyfikacji i grupowania
+# max_tokens dopasowane do zadania (nie 4096 na zapas)
+```
+
+### Obsługa błędów
+
+```python
+# execute_tool() zawsze zwraca string — nigdy nie rzucaj wyjątku do agenta
+try:
+    result = wykonaj_operacje()
+    return str(result)
+except Exception as e:
+    logger.error(f"Błąd: {e}", exc_info=True)
+    return f"BŁĄD: {e}"   # agent widzi błąd i może zareagować
+```
+
+### Logowanie
+
+```python
+import logging
+logger = logging.getLogger(__name__)
+
+logger.info(...)   # ważne akcje (start, koniec, zapis pliku)
+logger.debug(...)  # szczegóły iteracji, wywołań narzędzi
+logger.warning(...)  # przekroczony limit, fallback
+logger.error(...)  # błąd operacji (exc_info=True)
+# Nigdy print() w agent/ i sub_agents/ — tylko w tasks/ dla UX
+```
+
+---
+
+## Czego nigdy nie rób
+
+- Nie używaj `shutil.move()` do przenoszenia notatek — sypie wikilinki
+- Nie hardkoduj ścieżek do vaultu — zawsze `config.VAULT_PATH`
+- Nie modyfikuj `base_agent.py` dla logiki domenowej
+- Nie twórz nowych `OpenAI()` instancji w sub-agentach — używaj `self.client`
+- Nie commituj `.env`
+- Nie dodawaj do komunikatów commitów trailera `Made-with: Cursor` ani innych automatycznych oznaczeń narzędzia — sam opis zmian, bez „podpisu” edytora
+- Nie dodawaj LangGraph, LangChain ani innych frameworków agentowych bez wyraźnej decyzji
+- Nie zapisuj do vaultu bez `dry_run=False` — domyślnie wszystko jest symulacją
+- Nie używaj `print()` w `agent/` — tam jest `logging`
+
+---
+
+## Wzorzec dodawania nowego modułu (przykład: TodoAgent)
+
+```python
+# 1. sub_agents/todo_agent.py
+class TodoAgent(BaseAgent):
+    SKILLS = ["time_estimator"]   # skill musi istnieć w rejestrze
+    MAX_ITERATIONS = 6
+    
+    def get_tools(self): ...      # narzędzia specyficzne dla TODO
+    def execute_tool(self, name, args): ...
+
+# 2. agent/orchestrator.py — dopisz:
+AGENT_DESCRIPTIONS = {
+    ...
+    "todo": "Organizuje zadania w TODO.md — grupuje i czyści ukończone",
+}
+
+def _run_agent(self, agent_name, task):
+    match agent_name:
+        case "todo":
+            agent = TodoAgent(client=self.client, dry_run=self.dry_run)
+            return agent.run()
+
+# 3. tasks/todo.py pozostaje BEZ ZMIAN — TodoAgent go wywołuje
+```
+
+---
+
+## Fazy — co jest gotowe, co nie
+
+| Moduł | Status | Uwagi |
+|---|---|---|
+| `agent/base_agent.py` | ✅ gotowy | nie modyfikować |
+| `agent/orchestrator.py` | ✅ gotowy | rozszerzać o nowe agenty |
+| `agent/skills/clarifier.py` | ✅ gotowy | |
+| `agent/skills/para_classifier.py` | ✅ gotowy | |
+| `sub_agents/inbox_agent.py` | ✅ gotowy | testować na żywych danych |
+| `sub_agents/todo_agent.py` | 🔲 w kolejce | następny krok |
+| `sub_agents/research_agent.py` | 🔲 Faza 3 | wymaga RAG |
+| `tasks/todo.py` | ✅ gotowy | nie modyfikować |
+| `tasks/inbox.py` | ✅ gotowy | nie modyfikować |
+| `tasks/moc.py` | 🔲 w kolejce | |
+| RAG (`chromadb`) | 🔲 Faza 2 | dodać gdy vault > ~200 notatek |
+| Telegram bot | 🔲 Faza 3 | FastAPI webhook |
