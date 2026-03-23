@@ -5,7 +5,6 @@ Tryby działania:
     python main.py                  → interaktywny chat z orchestratorem
     python main.py --auto           → tryb automatyczny (cron): inbox + todo
     python main.py --dry-run        → symulacja bez zapisu
-    python main.py --legacy         → stare menu (tasks/)
 """
 
 import argparse
@@ -32,6 +31,7 @@ def run_interactive():
         if not user_input:
             continue
         if user_input.lower() in ("exit", "quit", "q"):
+            print("\nDo widzenia!")
             break
 
         result = orch.run(user_input)
@@ -49,29 +49,14 @@ def run_auto(dry_run: bool = False):
     logger.info("Tryb automatyczny — koniec")
 
 
-def run_legacy():
-    """Stare menu z tasks/ — kompatybilność wsteczna."""
-    print("⚠️  Tryb legacy — stare menu zadań")
-    # Import starego main jeśli istnieje
-    try:
-        import importlib
-        legacy = importlib.import_module("tasks.__legacy_menu")
-        legacy.run()
-    except ImportError:
-        print("Brak legacy menu. Użyj trybu interaktywnego.")
-
-
 def main():
     parser = argparse.ArgumentParser(description="Augmented Brain — osobisty system AI")
     parser.add_argument("--auto", action="store_true", help="Tryb automatyczny (cron)")
     parser.add_argument("--dry-run", action="store_true", help="Symulacja bez zapisu")
-    parser.add_argument("--legacy", action="store_true", help="Stare menu zadań")
     parser.add_argument("prompt", nargs="?", help="Jednorazowa komenda")
     args = parser.parse_args()
 
-    if args.legacy:
-        run_legacy()
-    elif args.auto:
+    if args.auto:
         run_auto(dry_run=args.dry_run)
     elif args.prompt:
         # Jednorazowa komenda: python main.py "ogarnij inbox"
