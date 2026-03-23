@@ -23,6 +23,7 @@ from openai import OpenAI
 from agent.base_agent import BaseAgent, AgentResult
 from config import MEDIA_FILE, VAULT_PATH, AREAS
 from tasks.web_utils import search_web as _search_web_fn, read_webpage as _read_webpage_fn
+from tasks.todo import add_task as _add_task
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +164,27 @@ INBOX_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "add_to_todo",
+            "description": (
+                "Dodaje zadanie do TODO.md. "
+                "Używaj gdy notatka zaczyna się od 'todo' — wyciągnij treść zadania (bez słowa 'todo') i dodaj. "
+                "Po dodaniu usuń notatkę z Inbox przez delete_note."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_text": {
+                        "type": "string",
+                        "description": "Treść zadania (bez przedrostka 'todo'), np. 'sprawdzić backup Obsidian'",
+                    }
+                },
+                "required": ["task_text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "ask_user",
             "description": "Zadaje użytkownikowi pytanie i czeka na odpowiedź. Używaj tylko gdy classification confidence < 0.6.",
             "parameters": {
@@ -219,6 +241,8 @@ class InboxAgent(BaseAgent):
                 return _search_web_fn(tool_args["query"], tool_args.get("max_results", 5))
             case "read_webpage":
                 return _read_webpage_fn(tool_args["url"])
+            case "add_to_todo":
+                return self._add_to_todo(tool_args["task_text"])
             case "ask_user":
                 return self.ask_user(tool_args["question"])
             case _:
@@ -231,15 +255,19 @@ class InboxAgent(BaseAgent):
                 f"Przejrzyj wszystkie notatki w 97_Inbox/. Dla każdej:\n"
                 f"1. Przeczytaj zawartość.\n"
                 f"2. Jeśli pusta lub bez wartości — usuń (delete_note).\n"
-                f"3. Sprawdź czy to notatka medialna — treść zaczyna się od 'film ', 'serial ',\n"
+                f"3. Sprawdź czy treść notatki zaczyna się od 'todo' (case-insensitive, może być 'todo:' lub 'todo '):\n"
+                f"   a. Wyciągnij treść zadania (usuń przedrostek 'todo' i opcjonalne dwukropki/spacje).\n"
+                f"   b. Wywołaj add_to_todo z tą treścią.\n"
+                f"   c. Usuń notatkę (delete_note).\n"
+                f"4. Sprawdź czy to notatka medialna — treść zaczyna się od 'film ', 'serial ',\n"
                 f"   'książka ', 'gra ', lub jest wyraźnym tytułem do obejrzenia/przeczytania:\n"
                 f"   a. Jeśli film lub serial — wyszukaj ocenę IMDB i gatunek przez search_web,\n"
                 f"      np. '[tytuł] IMDB rating genre'. Przeczytaj wynik przez read_webpage jeśli potrzeba.\n"
                 f"      Dla książek i gier NIE szukaj IMDB — podaj tylko gatunek jeśli go znasz.\n"
                 f"   b. Wywołaj save_to_watchlist z tytułem, typem i opisem.\n"
                 f"   c. Usuń notatkę (delete_note).\n"
-                f"4. Dla pozostałych notatek — klasyfikuj do folderu PARA i przenieś (move_note).\n"
-                f"5. Na końcu podsumuj co zrobiłeś.\n\n"
+                f"5. Dla pozostałych notatek — klasyfikuj do folderu PARA i przenieś (move_note).\n"
+                f"6. Na końcu podsumuj co zrobiłeś.\n\n"
                 f"dry_run={self.dry_run}. Obszary: {', '.join(AREAS)}"
             )
         return super().run(task)
@@ -357,6 +385,25 @@ class InboxAgent(BaseAgent):
 
         self.actions_taken.append({**action, "status": "done"})
         return f"Dodano '{title}' do sekcji {section} w 'Do obejrzenia i przeczytania'"
+
+    def _add_to_todo(self, task_text: str) -> str:
+        action = {"action": "add_to_todo", "task": task_text}
+
+        if self.dry_run:
+            self.actions_taken.append({**action, "status": "dry_run"})
+            return f"[DRY RUN] Dodałbym do TODO: '{task_text}'"
+
+        try:
+            success = _add_task(task_text)
+        except Exception as e:
+            logger.error("Błąd dodawania do TODO: %s", e, exc_info=True)
+            return f"BŁĄD: Nie udało się dodać do TODO: {e}"
+
+        if not success:
+            return "BŁĄD: Plik TODO.md nie istnieje"
+
+        self.actions_taken.append({**action, "status": "done"})
+        return f"Dodano do TODO: '{task_text}'"
 
     def _obsidian_move(self, source: Path, target: Path) -> bool:
         """Próbuje przenieść przez Obsidian CLI, fallback na os.rename."""
