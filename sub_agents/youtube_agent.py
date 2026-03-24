@@ -28,6 +28,7 @@ from config import (
     YT_KNOWLEDGE_BY_CATEGORY,
     YT_SUMMARIES_SUBFOLDER,
 )
+from tasks.moc import update_hub_note
 
 logger = logging.getLogger(__name__)
 
@@ -457,8 +458,14 @@ class YoutubeAgent(BaseAgent):
             target.write_text(full_text, encoding="utf-8")
             self._saved_note_title = f"{sub}/{note_title}"
             self._last_action = "create"
-            logger.info(f"Zapisano notatkę: {target}")
-            return f"Zapisano notatkę: {rel_display}/{target.name}"
+            logger.info("Zapisano notatkę: %s", target)
         except OSError as e:
-            logger.error(f"Błąd zapisu pliku {target}: {e}", exc_info=True)
+            logger.error("Błąd zapisu pliku %s: %s", target, e, exc_info=True)
             return f"BŁĄD podczas zapisu: {e}"
+
+        _, hub_title = YT_KNOWLEDGE_BY_CATEGORY[category]
+        hub_path = self._knowledge_dir / f"{hub_title}.md"
+        moc_result = update_hub_note(hub_path, safe_name, dry_run=self.dry_run)
+        logger.info("MOC: %s", moc_result)
+
+        return f"Zapisano notatkę: {rel_display}/{target.name}"

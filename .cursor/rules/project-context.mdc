@@ -20,18 +20,25 @@ alwaysApply: true
 | Ścieżka | Rola |
 |---------|------|
 | `main.py` | Punkt wejścia (interaktywny, `--auto`, `--dry-run`, `--legacy`) |
-| `config.py` | `VAULT_PATH`, `FOLDERS` (PARA), `AREAS`, model; YouTube: `YT_KNOWLEDGE_BY_CATEGORY`, `YT_CATEGORIES`, `YT_SUMMARIES_SUBFOLDER`; research: `RESEARCH_NOTES_SUBFOLDER` |
+| `config.py` | `VAULT_PATH`, `FOLDERS` (PARA), `AREAS` (dynamiczne z `02_Areas/`), model; YouTube: `YT_KNOWLEDGE_BY_CATEGORY`, `YT_CATEGORIES`, `YT_SUMMARIES_SUBFOLDER`; research: `RESEARCH_NOTES_SUBFOLDER` |
 | `agent/orchestrator.py` | Router komend do sub-agentów |
-| `agent/base_agent.py` | Pętla ReAct — **nie rozszerzaj jej „na skróty” nowymi feature’ami** |
+| `agent/base_agent.py` | Pętla ReAct — **nie rozszerzaj jej „na skróty" nowymi feature'ami** |
 | `agent/skills/` | Composable skille + rejestr w `agent/skills/__init__.py` |
-| `sub_agents/` | Konkretni agenci: `inbox_agent`, `todo_agent`, `youtube_agent`, `research_agent` |
+| `sub_agents/` | Konkretni agenci: `inbox_agent`, `todo_agent`, `youtube_agent`, `research_agent`, `orphans_agent` |
 | `tasks/` | Istniejący silnik (inbox, todo, …) wywoływany przez agentów |
 | `tasks/web_utils.py` | Wspólne HTTP helpers: `search_web`, `read_webpage`, `fetch_page` (DuckDuckGo) |
+| `tasks/moc.py` | `update_hub_note(hub_path, note_title, dry_run)` — aktualizuje notatki hub (MOC) |
 
-**Struktura vaultu (PARA):** `00_System` … `97_Inbox`, `98_Templates`, `99_Archive` — szczegóły w `docs/architecture.md`.
+**Struktura vaultu (PARA):** `00_System` … `97_Inbox`, `98_Templates`, `99_Archive` — szczegóły w `docs/architecture.md`. `02_Areas/` zawiera podfoldery (nie płaskie pliki) — jeden folder per obszar życia.
 
-**YouTube → notatka:** `YoutubeAgent` + skill `yt_transcript`. Kategoria treści wybierana przez model mapuje się w kodzie na realny podfolder w `03_Knowledge` i wikilink do hubu (`YT_KNOWLEDGE_BY_CATEGORY` w `config.py`). Aktualne foldery wiedzy używane przez mapowanie to `IT`, `YT_summaries` i `Zdrowie`; „inne” trafia do `YT_summaries` + `[[Yt summaries]]`. Opcjonalne `folder` w `save_note` tylko gdy użytkownik chce inną ścieżkę niż z kategorii. Pełny opis: `docs/architecture.md` (sekcja „Transkrypcje YouTube”).
+**AREAS (dynamiczne):** `config.AREAS` ładuje listę podfolderów z `02_Areas/` przy starcie — dodanie nowego obszaru do vaultu automatycznie aktualizuje listę bez zmiany kodu. Fallback: `["AI", "Money", "Photography", "Portfolio", "Praca"]`.
 
-**Research:** `ResearchAgent` + skille `clarifier` i `web_analyst`. Agent najpierw ocenia, czy wystarczy wiedza modelu, potem opcjonalnie sprawdza vault (`search_vault`) i dopiero w razie potrzeby używa webu (`search_web`, `read_webpage`). Wynik może zapisać do `03_Knowledge/Research` przez `save_research_note` — zapis nie jest obowiązkowy. Jest też domyślnym agentem (fallback) dla zapytań, których Orchestrator nie potrafi przypisać do bardziej wyspecjalizowanego agenta — np. "przeczytaj notatkę X i opowiedz mi o Y".
+**YouTube → notatka:** `YoutubeAgent` + skill `yt_transcript`. Kategoria treści wybierana przez model mapuje się w kodzie na realny podfolder w `03_Knowledge` i wikilink do hubu (`YT_KNOWLEDGE_BY_CATEGORY` w `config.py`). Kategorie: `ai`, `it` → `IT`; `fotografia` → `Fotografia`; `zdrowie` → `Zdrowie`; `inne` → `YT_summaries`. Po zapisaniu nowej notatki `YoutubeAgent` automatycznie aktualizuje plik hubu przez `tasks/moc.py`. Opcjonalne `folder` w `save_note` tylko gdy użytkownik chce inną ścieżkę niż z kategorii. Pełny opis: `docs/architecture.md` (sekcja „Transkrypcje YouTube").
+
+**Research:** `ResearchAgent` + skille `clarifier` i `web_analyst`. `search_vault` przeszukuje nazwę pliku, frontmatter (tagi, aliasy) i treść; opcjonalny parametr `folder` zawęża zakres do wskazanego podfolderu PARA. Wynik może zapisać do `03_Knowledge/Research` przez `save_research_note` — zapis nie jest obowiązkowy; jeśli hub podfolderu istnieje, `tasks/moc.py` doda do niego wikilink. Domyślny agent (fallback) dla zapytań nieprzypisanych do innych agentów.
+
+**Orphans:** `OrphansAgent` wykrywa osierocone notatki (bez backlinków) poza `97_Inbox` i `98_Templates` (`find_orphans`). Wykrywa też pliki `.md` leżące bezpośrednio w root vaultu poza PARA (`find_root_strays`). Domyślnie tylko raportuje listę; może też przenieść wskazaną notatkę do `99_Archive`.
+
+**MOC (Map of Content):** `tasks/moc.py` → `update_hub_note(hub_path, note_title, dry_run)`. Wywoływane automatycznie przez `YoutubeAgent` po `save_note` i przez `ResearchAgent` po `save_research_note` (tylko jeśli hub istnieje). Jeśli hub nie istnieje — tworzy go.
 
 **Przenoszenie plików w vaultcie:** preferuj Obsidian CLI (`obsidian move`), żeby zaktualizować wikilinki; fallback w kodzie jeśli CLI niedostępne.

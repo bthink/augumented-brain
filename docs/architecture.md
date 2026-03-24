@@ -19,13 +19,15 @@ Cel nadrzędny: **vault który sam się ogarnia**. Notatki z telefonu trafiają 
 Bf-vault/
 ├── 00_System/          → TODO.md i pliki systemowe
 ├── 01_Projects/        → projekty z deadlinem i konkretnym wynikiem
-├── 02_Areas/           → obszary życia bez końca (AI, Money, Photography, Portfolio, Praca)
+├── 02_Areas/           → obszary życia bez końca; każdy obszar to podfolder (AI/, Money/, Photography/, Portfolio/, Praca/)
 ├── 03_Knowledge/       → materiał referencyjny (m.in. podfoldery wg tematu — zob. poniżej „YouTube”)
 ├── 04_Ideas/           → luźne pomysły, rzeczy do obejrzenia/przeczytania
 ├── 97_Inbox/           → surowe notatki z telefonu — tu trafia wszystko
 ├── 98_Templates/       → szablony notatek
 └── 99_Archive/         → nieaktywne, zakończone
 ```
+
+> `AREAS` w `config.py` jest ładowane dynamicznie z podfolderów `02_Areas/` przy starcie — nie wymaga ręcznej aktualizacji gdy dodajesz nowy obszar.
 
 ---
 
@@ -56,9 +58,9 @@ Bf-vault/
       ▼
 [ Orchestrator ]          agent/orchestrator.py
       │  routuje do sub-agentów, zbiera wyniki
-      ├──────────────────┬──────────────────┬──────────────────┐
-      ▼                  ▼                  ▼                  ▼
-[ InboxAgent ]    [ TodoAgent ]    [ YoutubeAgent ]  [ ResearchAgent ]   ← sub_agents/
+      ├──────────────┬──────────────┬──────────────┬──────────────┐
+      ▼              ▼              ▼              ▼              ▼
+[ InboxAgent ] [ TodoAgent ] [ YoutubeAgent ] [ ResearchAgent ] [ OrphansAgent ]   ← sub_agents/
       │                  │                  │
       │    każdy sub-agent komponuje swoje skille
       │                  │
@@ -71,8 +73,8 @@ Bf-vault/
   web_analyst            analiza webowa i synteza źródeł
       │
       ▼
-[ Tasks ]                tasks/  ← istniejący kod, bez zmian
-  inbox.py  todo.py  web_utils.py  moc.py  media.py  orphans.py  proofread.py
+[ Tasks ]                tasks/  ← funkcje silnika; sub-agenty je wywołują
+  inbox.py  todo.py  web_utils.py  moc.py  orphans.py  media.py  proofread.py
       │
       ▼
 [ Obsidian Vault ]       pliki .md na dysku / iCloud
@@ -84,6 +86,7 @@ Bf-vault/
 - `inbox` — wyłącznie pliki w `97_Inbox/`
 - `youtube` — transkrypcja lub przeniesienie/poprawa notatki YT w `03_Knowledge`
 - `research` — pytania o vault, pytania ogólne, research z/bez zapisu
+- `orphans` — wykrywanie osieroconych notatek (bez backlinków), opcjonalnie archiwizacja
 - fallback: jeśli LLM nie wskaże żadnego znanego agenta → `research`
 
 `Orchestrator.__init__` ma domyślnie `dry_run=False` (zapis live). `--dry-run` w CLI nadpisuje tę wartość.
@@ -109,7 +112,8 @@ augumented-brain/
 ├── run.sh
 ├── .env                      # NIE commitować
 ├── .gitignore
-├── ARCHITECTURE.md           # ten plik
+├── docs/
+│   └── architecture.md       # ten plik
 │
 ├── agent/
 │   ├── base_agent.py         # klasa bazowa — pętla ReAct, ładowanie skilli
@@ -126,15 +130,16 @@ augumented-brain/
 │   ├── inbox_agent.py        # ✅ klasyfikuje i przenosi notatki z Inbox; obsługuje media
 │   ├── todo_agent.py         # ✅ opakowuje tasks/todo.py
 │   ├── youtube_agent.py      # ✅ YT → notatka; folder + hub wg YT_KNOWLEDGE_BY_CATEGORY (config)
-│   └── research_agent.py     # ✅ research: vault + internet + zapis notatki
+│   ├── research_agent.py     # ✅ research: vault + internet + zapis notatki
+│   └── orphans_agent.py      # ✅ osierocone notatki + root strays: detekcja + archiwizacja
 │
 └── tasks/                    # istniejący kod silnika — sub-agenty go wywołują
     ├── todo.py               # ✅ parsuje i grupuje TODO.md
     ├── inbox.py              # ✅ klasyfikacja legacy (bez agenta); obsługuje media
     ├── web_utils.py          # ✅ wspólne narzędzia HTTP: search_web, read_webpage, fetch_page
-    ├── moc.py                # 🔲 aktualizacja notatek agregujących
+    ├── moc.py                # ✅ aktualizacja notatek hub (MOC) — update_hub_note()
+    ├── orphans.py            # ✅ detekcja osieroconych + root strays (bez backlinków)
     ├── media.py              # 🔲 podsumowania YT i mediów
-    ├── orphans.py            # 🔲 detekcja osieroconych notatek
     └── proofread.py          # 🔲 korekta językowa
 ```
 
@@ -181,15 +186,15 @@ Jest domyślnym agentem dla zapytań, których Orchestrator nie potrafi przypisa
 Standardowy przepływ:
 1. ocenia czy zadanie to przeniesienie notatki → jeśli tak, używa `move_vault_note` i kończy
 2. ocenia, czy wystarczy wiedza modelu
-3. opcjonalnie sprawdza podobne notatki przez `search_vault`
+3. opcjonalnie sprawdza podobne notatki przez `search_vault` (przeszukuje nazwę pliku, frontmatter — tagi/aliasy — i treść; opcjonalny parametr `folder` zawęża zakres do wybranego podfolderu PARA)
 4. opcjonalnie zbiera wyniki przez `search_web`
 5. opcjonalnie czyta wybrane strony przez `read_webpage`
 6. syntetyzuje wnioski według zasad `web_analyst`
-7. opcjonalnie zapisuje wynik do `03_Knowledge/Research` przez `save_research_note` — **zapis nie jest obowiązkowy**, zależy od prośby użytkownika
+7. opcjonalnie zapisuje wynik do `03_Knowledge/Research` przez `save_research_note` — **zapis nie jest obowiązkowy**, zależy od prośby użytkownika; jeśli plik hubu podfolderu istnieje, `tasks/moc.py` automatycznie dodaje do niego wikilink nowej notatki
 
 **Narzędzie `move_vault_note`** — przenosi dowolną notatkę między folderami vaultu (Obsidian CLI → fallback `os.rename`). Akceptuje `source_path` (względem root vaultu) i `target_folder` (np. `02_Areas/Photography`). Obsługuje `dry_run`.
 
-Implementacja nie wymaga dodatkowych bibliotek HTTP — zarówno `ResearchAgent`, jak i `InboxAgent` korzystają z helpera `tasks/web_utils.py` (standardowa biblioteka Pythona + opcjonalnie `certifi`).
+Implementacja nie wymaga dodatkowych bibliotek HTTP (standardowa biblioteka Pythona + opcjonalnie `certifi`). `InboxAgent` używa helpera `tasks/web_utils.py`. `ResearchAgent` ma własną implementację HTTP wbudowaną bezpośrednio w plik agenta — duplikuje logikę web_utils, kandydat do refaktoryzacji.
 
 ---
 
@@ -227,12 +232,15 @@ Notatki w `97_Inbox/` mogą być skrótami do filmów, seriali, książek lub gi
 
 **Domyślne mapowanie kategorii** (skrót):
 
-| Kategoria   | Podfolder w `03_Knowledge` | Hub (przykład)   |
-|-------------|----------------------------|------------------|
-| ai          | `IT`                       | `[[IT]]`         |
-| it          | `IT`                       | `[[IT]]`         |
-| zdrowie     | `Zdrowie`                  | `[[Zdrowie]]`    |
-| inne        | `YT_summaries`             | `[[Yt summaries]]` |
+| Kategoria   | Podfolder w `03_Knowledge` | Hub (przykład)       |
+|-------------|----------------------------|----------------------|
+| ai          | `IT`                       | `[[IT]]`             |
+| it          | `IT`                       | `[[IT]]`             |
+| fotografia  | `Fotografia`               | `[[Fotografia]]`     |
+| zdrowie     | `Zdrowie`                  | `[[Zdrowie]]`        |
+| inne        | `YT_summaries`             | `[[Yt summaries]]`   |
+
+Po zapisaniu nowej notatki `YoutubeAgent` automatycznie aktualizuje plik hubu (np. `03_Knowledge/IT.md`) dodając do niego wikilink do nowej notatki — przez `tasks/moc.py`.
 
 Lista dozwolonych kategorii: `YT_CATEGORIES` (klucze `YT_KNOWLEDGE_BY_CATEGORY`). Podfoldery są tworzone przy zapisie, jeśli nie istnieją.
 
@@ -303,22 +311,35 @@ augumented-brain/
 ├── .env
 │
 ├── agent/
-│   ├── __init__.py          ← wymagany (pusty)
+│   ├── __init__.py              ← wymagany (pusty)
 │   ├── base_agent.py
 │   ├── orchestrator.py
 │   └── skills/
-│       ├── __init__.py      ← wymagany (rejestr skilli, NIE pusty)
+│       ├── __init__.py          ← wymagany (rejestr skilli, NIE pusty)
 │       ├── clarifier.py
-│       └── para_classifier.py
+│       ├── para_classifier.py
+│       ├── time_estimator.py
+│       ├── yt_transcript.py
+│       └── web_analyst.py
 │
 ├── sub_agents/
-│   ├── __init__.py          ← wymagany (pusty)
-│   └── inbox_agent.py
+│   ├── __init__.py              ← wymagany (pusty)
+│   ├── inbox_agent.py
+│   ├── todo_agent.py
+│   ├── youtube_agent.py
+│   ├── research_agent.py
+│   └── orphans_agent.py
 │
-└── tasks/
-    ├── __init__.py          ← wymagany (pusty)
-    ├── inbox.py
-    └── todo.py
+├── tasks/
+│   ├── __init__.py              ← wymagany (pusty)
+│   ├── inbox.py
+│   ├── todo.py
+│   ├── web_utils.py
+│   ├── moc.py
+│   └── orphans.py
+│
+└── docs/
+    └── architecture.md
 ```
 
 > **Uwaga:** `agent/skills/__init__.py` zawiera rejestr skilli — nie jest pustym plikiem. Zastąpienie go pustym plikiem spowoduje `ImportError` przy starcie agenta.
@@ -371,7 +392,14 @@ Fundament systemu. Pętla ReAct, composowalne skille, pierwsze sub-agenty.
 - [x] `TodoAgent` — opakowanie tasks/todo.py
 - [x] `YoutubeAgent` + skill `yt_transcript` — transkrypcja YT → notatka w `03_Knowledge` (podfolder i `[[hub]]` z `YT_KNOWLEDGE_BY_CATEGORY`)
 - [x] `InboxAgent` media handling — rozpoznawanie `film/serial/książka/gra [tytuł]`, lookup IMDB (filmy/seriale), zapis do watchlisty, usunięcie z Inboxu
-- [x] `tasks/web_utils.py` — wspólne HTTP helpers (DuckDuckGo, fetch page) reużywane przez `InboxAgent` i `ResearchAgent`
+- [x] `ResearchAgent` + skill `web_analyst` — research: vault + internet + opcjonalny zapis do `03_Knowledge/Research`
+- [x] `tasks/web_utils.py` — wspólne HTTP helpers (DuckDuckGo, fetch page) używane przez `InboxAgent`
+- [x] `OrphansAgent` + `tasks/orphans.py` — notatki bez backlinków + opcjonalna archiwizacja do `99_Archive`
+- [x] `tasks/moc.py` — `update_hub_note()` aktualizuje huby MOC; wywoływane przez `YoutubeAgent` i `ResearchAgent` po zapisie notatki
+- [x] `OrphansAgent` `find_root_strays` — wykrywanie plików `.md` w root vaultu poza PARA
+- [x] `config.AREAS` dynamiczne — ładowane z podfolderów `02_Areas/` przy starcie
+- [x] `search_vault` wzbogacony — frontmatter (tagi, aliasy), kontekst wokół dopasowania, opcjonalny filtr `folder`
+- [x] Kategoria YT `fotografia` → `03_Knowledge/Fotografia/` + `[[Fotografia]]`
 - [ ] Testy na żywych danych, dostrojenie promptów
 
 ### Faza 2 — RAG (kiedy zajdzie potrzeba)

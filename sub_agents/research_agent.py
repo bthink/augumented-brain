@@ -29,6 +29,7 @@ from openai import OpenAI
 
 from agent.base_agent import BaseAgent, AgentResult
 from config import AREAS, FOLDERS, RESEARCH_NOTES_SUBFOLDER, VAULT_PATH
+from tasks.moc import update_hub_note
 
 try:
     import certifi
@@ -91,7 +92,8 @@ RESEARCH_TOOLS = [
         "function": {
             "name": "search_vault",
             "description": (
-                "Przeszukuje markdowny w vaulcie po nazwie pliku i treści. "
+                "Przeszukuje markdowny w vaulcie po nazwie pliku, frontmatter (tagi, aliasy) i treści. "
+                "Zwraca kontekst wokół dopasowania. "
                 "Używaj przed tworzeniem nowej notatki, żeby znaleźć istniejący kontekst."
             ),
             "parameters": {
@@ -104,6 +106,13 @@ RESEARCH_TOOLS = [
                     "max_results": {
                         "type": "integer",
                         "description": "Maksymalna liczba wyników, domyślnie 8",
+                    },
+                    "folder": {
+                        "type": "string",
+                        "description": (
+                            "Opcjonalny folder PARA do przeszukania, np. '02_Areas' "
+                            "lub '03_Knowledge/IT'. Domyślnie przeszukuje cały vault."
+                        ),
                     },
                 },
                 "required": ["query"],
@@ -283,7 +292,11 @@ class ResearchAgent(BaseAgent):
             case "read_webpage":
                 return self._read_webpage(tool_args["url"])
             case "search_vault":
-                return self._search_vault(tool_args["query"], tool_args.get("max_results", 8))
+                return self._search_vault(
+                    tool_args["query"],
+                    tool_args.get("max_results", 8),
+                    tool_args.get("folder"),
+                )
             case "read_vault_note":
                 return self._read_vault_note(tool_args["relative_path"])
             case "save_research_note":
@@ -424,15 +437,30 @@ class ResearchAgent(BaseAgent):
             ensure_ascii=False,
         )
 
-    def _search_vault(self, query: str, max_results: int = 8) -> str:
+    def _search_vault(
+        self, query: str, max_results: int = 8, folder: str | None = None
+    ) -> str:
         phrase = query.strip().lower()
         if not phrase:
             return "BŁĄD: Puste zapytanie."
 
         limit = min(max(int(max_results or 8), 1), 20)
+
+        search_root = VAULT_PATH
+        if folder:
+            folder_clean = str(folder).strip().strip("/\\")
+            candidate = (VAULT_PATH / folder_clean).resolve()
+            try:
+                candidate.relative_to(VAULT_PATH.resolve())
+            except ValueError:
+                return f"BŁĄD: Folder '{folder_clean}' jest poza vaultem."
+            if not candidate.is_dir():
+                return f"BŁĄD: Folder '{folder_clean}' nie istnieje w vaulcie."
+            search_root = candidate
+
         results = []
 
-        for path in VAULT_PATH.rglob("*.md"):
+        for path in search_root.rglob("*.md"):
             if not path.is_file():
                 continue
             try:
@@ -441,20 +469,40 @@ class ResearchAgent(BaseAgent):
                 continue
 
             rel = str(path.relative_to(VAULT_PATH))
-            haystack = f"{path.stem}\n{raw}".lower()
+
+            frontmatter_extra = ""
+            if raw.startswith("---"):
+                fm_end = raw.find("\n---", 3)
+                if fm_end != -1:
+                    fm_block = raw[3:fm_end]
+                    for line in fm_block.splitlines():
+                        stripped = line.strip()
+                        if stripped.startswith(("tags:", "aliases:", "- ")):
+                            frontmatter_extra += " " + stripped
+
+            haystack = f"{path.stem}\n{frontmatter_extra}\n{raw}".lower()
             if phrase not in haystack:
                 continue
 
-            idx = haystack.find(phrase)
-            snippet_start = max(idx - 120, 0)
-            snippet_end = min(idx + 240, len(raw))
-            snippet = raw[snippet_start:snippet_end].replace("\n", " ").strip()
+            lines = raw.splitlines()
+            lower_lines = [ln.lower() for ln in lines]
+            match_idx = next(
+                (i for i, ln in enumerate(lower_lines) if phrase in ln), None
+            )
+            if match_idx is not None:
+                ctx_start = max(0, match_idx - 2)
+                ctx_end = min(len(lines), match_idx + 3)
+                snippet = " | ".join(
+                    ln.strip() for ln in lines[ctx_start:ctx_end] if ln.strip()
+                )
+            else:
+                snippet = lines[0].strip() if lines else ""
 
             results.append(
                 {
                     "path": rel,
                     "title": path.stem,
-                    "snippet": re.sub(r"\s{2,}", " ", snippet),
+                    "snippet": re.sub(r"\s{2,}", " ", snippet)[:300],
                 }
             )
             if len(results) >= limit:
@@ -550,7 +598,11 @@ class ResearchAgent(BaseAgent):
             f"date: {date.today().isoformat()}\n"
             "---\n\n"
         )
-        full_text = frontmatter + content.strip() + "\n"
+        body = (content or "").strip()
+        backlink = f"[[{subfolder}]]"
+        if backlink not in body:
+            body = f"{backlink}\n\n{body}" if body else backlink
+        full_text = frontmatter + body + "\n"
 
         if self.dry_run:
             self._saved_note_title = f"{subfolder}/{safe_name}.md"
@@ -567,4 +619,10 @@ class ResearchAgent(BaseAgent):
             return f"BŁĄD zapisu: {e}"
 
         self._saved_note_title = f"{subfolder}/{safe_name}.md"
+
+        hub_path = self._knowledge_dir / f"{subfolder}.md"
+        if hub_path.is_file():
+            moc_result = update_hub_note(hub_path, safe_name, dry_run=False)
+            logger.info("MOC: %s", moc_result)
+
         return f"Zapisano notatkę: {FOLDERS['knowledge']}/{subfolder}/{safe_name}.md"

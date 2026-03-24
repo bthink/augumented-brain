@@ -204,11 +204,18 @@ def _run_agent(self, agent_name, task):
 | `agent/orchestrator.py` | ✅ gotowy | rozszerzać o nowe agenty |
 | `agent/skills/clarifier.py` | ✅ gotowy | |
 | `agent/skills/para_classifier.py` | ✅ gotowy | |
+| `agent/skills/time_estimator.py` | ✅ gotowy | |
+| `agent/skills/yt_transcript.py` | ✅ gotowy | |
+| `agent/skills/web_analyst.py` | ✅ gotowy | |
 | `sub_agents/inbox_agent.py` | ✅ gotowy | testować na żywych danych |
-| `sub_agents/todo_agent.py` | 🔲 w kolejce | następny krok |
-| `sub_agents/research_agent.py` | 🔲 Faza 3 | wymaga RAG |
+| `sub_agents/todo_agent.py` | ✅ gotowy | |
+| `sub_agents/youtube_agent.py` | ✅ gotowy | |
+| `sub_agents/research_agent.py` | ✅ gotowy | RAG Faza 2 |
+| `sub_agents/orphans_agent.py` | ✅ gotowy | |
 | `tasks/todo.py` | ✅ gotowy | nie modyfikować |
 | `tasks/inbox.py` | ✅ gotowy | nie modyfikować |
-| `tasks/moc.py` | 🔲 w kolejce | |
+| `tasks/web_utils.py` | ✅ gotowy | HTTP helpers (InboxAgent) |
+| `tasks/orphans.py` | ✅ gotowy | |
+| `tasks/moc.py` | ✅ gotowy | `update_hub_note()` — wywoływany przez YT i Research |
 | RAG (`chromadb`) | 🔲 Faza 2 | dodać gdy vault > ~200 notatek |
 | Telegram bot | 🔲 Faza 3 | FastAPI webhook |

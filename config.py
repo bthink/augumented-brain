@@ -39,12 +39,28 @@ TODO_QUICK_MAX_MINUTES = 15
 OPENAI_MODEL = "gpt-4o-mini"
 
 # ── Obszary ──────────────────────────────────────────────────────────────────
-# Tylko realne podfoldery w 02_Areas. "Obszary.md" jest notatką hub, nie kategorią.
-AREAS = ["AI", "Money", "Photography", "Portfolio", "Praca"]
+# Dynamicznie ładowane z 02_Areas/ przy starcie — odzwierciedla realną strukturę vaultu.
+# Notatki-huby (np. "Obszary") są wykluczone z listy kategorii.
+_AREAS_HUB_NOTES = {"Obszary"}
+
+
+def _load_areas() -> list[str]:
+    areas_dir = VAULT_PATH / FOLDERS["areas"]
+    try:
+        return sorted(
+            p.name
+            for p in areas_dir.iterdir()
+            if p.is_dir() and not p.name.startswith(".")
+        )
+    except OSError:
+        return ["AI", "Money", "Photography", "Portfolio", "Praca"]
+
+
+AREAS = _load_areas()
 
 # ── Knowledge / YouTube ──────────────────────────────────────────────────────
 # Foldery odzwierciedlają aktualną strukturę 03_Knowledge z vaultu.
-KNOWLEDGE_FOLDERS = ["IT", "YT_summaries", "Zdrowie"]
+KNOWLEDGE_FOLDERS = ["Fotografia", "IT", "YT_summaries", "Zdrowie"]
 YT_SUMMARIES_SUBFOLDER = "YT_summaries"
 RESEARCH_NOTES_SUBFOLDER = "Research"
 
@@ -53,6 +69,7 @@ RESEARCH_NOTES_SUBFOLDER = "Research"
 YT_KNOWLEDGE_BY_CATEGORY: dict[str, tuple[str, str]] = {
     "ai": ("IT", "IT"),
     "it": ("IT", "IT"),
+    "fotografia": ("Fotografia", "Fotografia"),
     "zdrowie": ("Zdrowie", "Zdrowie"),
     "inne": (YT_SUMMARIES_SUBFOLDER, "Yt summaries"),
 }
