@@ -27,6 +27,13 @@ Klasyfikujesz treści do struktury PARA. Dostępne lokalizacje w vaulcie:
 4. Przy wątpliwościach między dwiema lokalizacjami — wybierz bardziej konkretną
 5. Confidence < 0.6 oznacza że powinieneś zapytać użytkownika
 
+**Ukończone akcje i sub-projekty** (frontmatter `status: done` lub tag `#done`/`#ukończone`):
+6. Jeśli ukończona akcja/sub-projekt należy do aktywnego obszaru życia (np. Portfolio, Photography)
+   → przenieś do **02_Areas/<obszar>** jako zapis historyczny (area pozostaje aktywna)
+7. Jeśli ukończony był samodzielny projekt bez powiązania z aktywnym obszarem
+   → przenieś do **99_Archive**
+8. Zasada: obszar (Area) nigdy nie "kończy się" — kończą się konkretne akcje w nim
+
 **Output klasyfikacji** (zawsze JSON):
 ```json
 {{

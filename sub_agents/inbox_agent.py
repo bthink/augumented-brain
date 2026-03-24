@@ -266,8 +266,14 @@ class InboxAgent(BaseAgent):
                 f"      Dla książek i gier NIE szukaj IMDB — podaj tylko gatunek jeśli go znasz.\n"
                 f"   b. Wywołaj save_to_watchlist z tytułem, typem i opisem.\n"
                 f"   c. Usuń notatkę (delete_note).\n"
-                f"5. Dla pozostałych notatek — klasyfikuj do folderu PARA i przenieś (move_note).\n"
-                f"6. Na końcu podsumuj co zrobiłeś.\n\n"
+                f"5. Sprawdź czy notatka jest oznaczona jako ukończona:\n"
+                f"   - frontmatter zawiera 'status: done' lub 'status: ukończone'\n"
+                f"   - LUB treść zawiera tag #done lub #ukończone\n"
+                f"   Jeśli tak: zastosuj logikę ukończonych akcji z para_classifier (zasady 6-8):\n"
+                f"   - Akcja/sub-projekt powiązany z aktywnym obszarem ({', '.join(AREAS)}) → 02_Areas/<obszar>\n"
+                f"   - Samodzielny zakończony projekt bez aktywnego obszaru → 99_Archive\n"
+                f"6. Dla pozostałych notatek — klasyfikuj do folderu PARA i przenieś (move_note).\n"
+                f"7. Na końcu podsumuj co zrobiłeś.\n\n"
                 f"dry_run={self.dry_run}. Obszary: {', '.join(AREAS)}"
             )
         return super().run(task)
