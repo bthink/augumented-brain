@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import ssl
+import subprocess
 from datetime import date
 from html import unescape
 from pathlib import Path
@@ -26,7 +28,7 @@ from urllib.request import Request, urlopen
 from openai import OpenAI
 
 from agent.base_agent import BaseAgent, AgentResult
-from config import FOLDERS, RESEARCH_NOTES_SUBFOLDER, VAULT_PATH
+from config import AREAS, FOLDERS, RESEARCH_NOTES_SUBFOLDER, VAULT_PATH
 
 try:
     import certifi
@@ -162,6 +164,34 @@ RESEARCH_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "move_vault_note",
+            "description": (
+                "Przenosi notatkę między folderami vaultu i aktualizuje wikilinki (Obsidian CLI). "
+                "Używaj gdy użytkownik prosi o przeniesienie już istniejącej notatki do innego miejsca, "
+                f"np. do 02_Areas/Photography lub 03_Knowledge/IT. Dostępne obszary: {AREAS}."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "source_path": {
+                        "type": "string",
+                        "description": "Ścieżka źródłowa względem root vaultu, np. '03_Knowledge/Research/Temat.md'",
+                    },
+                    "target_folder": {
+                        "type": "string",
+                        "description": (
+                            "Folder docelowy względem root vaultu (bez nazwy pliku), "
+                            "np. '02_Areas/Photography' lub '03_Knowledge/IT'"
+                        ),
+                    },
+                },
+                "required": ["source_path", "target_folder"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "ask_user",
             "description": "Zadaje użytkownikowi pytanie i czeka na odpowiedź.",
             "parameters": {
@@ -262,6 +292,11 @@ class ResearchAgent(BaseAgent):
                     tool_args["content"],
                     tool_args.get("folder"),
                 )
+            case "move_vault_note":
+                return self._move_vault_note(
+                    tool_args["source_path"],
+                    tool_args["target_folder"],
+                )
             case "ask_user":
                 return self.ask_user(tool_args["question"])
             case _:
@@ -280,10 +315,11 @@ class ResearchAgent(BaseAgent):
             task = (
                 f"{task}\n\n"
                 "WAŻNE:\n"
-                "1. Najpierw oceń, czy możesz odpowiedzieć z wiedzy modelu.\n"
-                "2. Jeśli temat może już istnieć w notatkach, użyj search_vault.\n"
-                "3. Użyj search_web i read_webpage tylko wtedy, gdy potrzebujesz aktualności, źródeł lub zewnętrznej weryfikacji.\n"
-                "4. Nie kończ pracy bez save_research_note, chyba że użytkownik wyraźnie prosi tylko o odpowiedź bez zapisu.\n"
+                "1. Jeśli zadanie to przeniesienie notatki — użyj move_vault_note i zakończ.\n"
+                "2. Jeśli zadanie to pytanie lub research — najpierw oceń, czy wystarczy wiedza modelu.\n"
+                "3. Jeśli temat może już istnieć w notatkach, użyj search_vault.\n"
+                "4. Użyj search_web i read_webpage tylko gdy potrzebujesz aktualności lub zewnętrznej weryfikacji.\n"
+                "5. Dla research: zapisz wynik przez save_research_note, chyba że użytkownik prosi tylko o odpowiedź.\n"
             )
 
         result = super().run(task)
@@ -442,6 +478,59 @@ class ResearchAgent(BaseAgent):
         if len(content) > MAX_NOTE_CHARS:
             content = content[:MAX_NOTE_CHARS] + "\n\n[... skrócono ...]"
         return content
+
+    def _obsidian_move(self, source: Path, target: Path) -> bool:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            result = subprocess.run(
+                ["obsidian", "move", str(source), str(target)],
+                capture_output=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                logger.info("Obsidian CLI: przeniesiono %s", source.name)
+                return True
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            logger.debug("Obsidian CLI niedostępne — używam os.rename")
+
+        try:
+            os.rename(source, target)
+            return True
+        except OSError as e:
+            logger.error("Błąd przenoszenia %s → %s: %s", source, target, e, exc_info=True)
+            return False
+
+    def _move_vault_note(self, source_path: str, target_folder: str) -> str:
+        source = _safe_relative_path(source_path)
+        if not source:
+            return "BŁĄD: Nieprawidłowa ścieżka źródłowa."
+        if not source.is_file():
+            return f"BŁĄD: Plik nie istnieje: {source_path}"
+
+        target_folder_clean = str(target_folder).strip().replace("\\", "/").strip("/")
+        if not target_folder_clean or ".." in target_folder_clean.split("/"):
+            return "BŁĄD: Nieprawidłowy folder docelowy."
+
+        target_dir = (VAULT_PATH / target_folder_clean).resolve()
+        try:
+            target_dir.relative_to(VAULT_PATH.resolve())
+        except ValueError:
+            return "BŁĄD: Folder docelowy musi być wewnątrz vaultu."
+
+        target = target_dir / source.name
+        if target.resolve() == source.resolve():
+            return f"Notatka już jest w {target_folder_clean}/."
+
+        if self.dry_run:
+            return f"[DRY RUN] Przeniósłbym '{source.name}' → {target_folder_clean}/"
+
+        if target.exists():
+            return f"BŁĄD: Plik '{source.name}' już istnieje w {target_folder_clean}/."
+
+        if self._obsidian_move(source, target):
+            logger.info("Przeniesiono %s → %s", source_path, target_folder_clean)
+            return f"Przeniesiono '{source.name}' → {target_folder_clean}/"
+        return "BŁĄD: Nie udało się przenieść pliku."
 
     def _save_research_note(self, filename: str, content: str, folder: str | None = None) -> str:
         safe_name = "".join(c for c in filename if c not in r'\/:*?"<>|').strip()
