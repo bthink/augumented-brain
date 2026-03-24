@@ -59,6 +59,7 @@ docs/architecture.md       # źródło prawdy o architekturze
 3. Zaimplementuj `get_tools()` → lista tool schema w formacie OpenAI
 4. Zaimplementuj `execute_tool()` → `match tool_name: case ...`
 5. Zarejestruj w `agent/orchestrator.py` → `AGENT_DESCRIPTIONS` i `_run_agent()`
+6. **Obowiązkowo** dodaj/uzupełnij opis nowego agenta w `AGENT_DESCRIPTIONS` (to część kontraktu routingu, nie opcja).
 
 ### Operacje na plikach vaultu
 

@@ -32,6 +32,6 @@ alwaysApply: true
 
 **YouTube → notatka:** `YoutubeAgent` + skill `yt_transcript`. Kategoria treści wybierana przez model mapuje się w kodzie na realny podfolder w `03_Knowledge` i wikilink do hubu (`YT_KNOWLEDGE_BY_CATEGORY` w `config.py`). Aktualne foldery wiedzy używane przez mapowanie to `IT`, `YT_summaries` i `Zdrowie`; „inne” trafia do `YT_summaries` + `[[Yt summaries]]`. Opcjonalne `folder` w `save_note` tylko gdy użytkownik chce inną ścieżkę niż z kategorii. Pełny opis: `docs/architecture.md` (sekcja „Transkrypcje YouTube”).
 
-**Research:** `ResearchAgent` + skille `clarifier` i `web_analyst`. Agent najpierw ocenia, czy wystarczy wiedza modelu, potem opcjonalnie sprawdza vault (`search_vault`) i dopiero w razie potrzeby używa webu (`search_web`, `read_webpage`). Wynik może zapisać do `03_Knowledge/Research` przez `save_research_note`.
+**Research:** `ResearchAgent` + skille `clarifier` i `web_analyst`. Agent najpierw ocenia, czy wystarczy wiedza modelu, potem opcjonalnie sprawdza vault (`search_vault`) i dopiero w razie potrzeby używa webu (`search_web`, `read_webpage`). Wynik może zapisać do `03_Knowledge/Research` przez `save_research_note` — zapis nie jest obowiązkowy. Jest też domyślnym agentem (fallback) dla zapytań, których Orchestrator nie potrafi przypisać do bardziej wyspecjalizowanego agenta — np. "przeczytaj notatkę X i opowiedz mi o Y".
 
 **Przenoszenie plików w vaultcie:** preferuj Obsidian CLI (`obsidian move`), żeby zaktualizować wikilinki; fallback w kodzie jeśli CLI niedostępne.

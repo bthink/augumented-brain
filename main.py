@@ -2,9 +2,9 @@
 main.py — punkt wejścia dla Augmented Brain.
 
 Tryby działania:
-    python main.py                  → interaktywny chat z orchestratorem
-    python main.py --auto           → tryb automatyczny (cron): inbox + todo
-    python main.py --dry-run        → symulacja bez zapisu
+    python3 main.py                 → interaktywny chat z orchestratorem (domyślnie live)
+    python3 main.py --auto          → tryb automatyczny (cron): inbox + todo
+    python3 main.py --dry-run       → symulacja bez zapisu
 """
 
 import argparse
@@ -59,7 +59,7 @@ def main():
     if args.auto:
         run_auto(dry_run=args.dry_run)
     elif args.prompt:
-        # Jednorazowa komenda: python main.py "ogarnij inbox"
+        # Jednorazowa komenda: python3 main.py "ogarnij inbox"
         from agent.orchestrator import Orchestrator
         orch = Orchestrator(dry_run=args.dry_run)
         print(orch.run(args.prompt))

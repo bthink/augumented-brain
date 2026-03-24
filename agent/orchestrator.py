@@ -27,7 +27,12 @@ AGENT_DESCRIPTIONS = {
     "todo": "Organizuje zadania w TODO.md — grupuje i czyści ukończone",
     "youtube": "Transkrypcja YouTube i zapis notatki w 03_Knowledge. "
     "Także: przeniesienie lub zmiana kategorii istniejącej notatki YT już w 03_Knowledge (np. zła kategoria/podfolder).",
-    "research": "Prowadzi research na podany temat - łączy vault z internetem i zapisuje notatkę researchową",
+    "research": (
+        "Odpowiada na pytania wymagające wiedzy z vaultu lub internetu. "
+        "Używaj gdy: użytkownik pyta o coś co może być w notatce, chce przeczytać notatkę i dowiedzieć się więcej, "
+        "prosi o research tematu, chce połączyć wiedzę z vaultu z informacjami z sieci. "
+        "Agent może zapisać notatkę, ale nie musi — zależy od prośby."
+    ),
     "orphans": "Znajduje notatki bez linków — kandydaci do archiwum [wkrótce]",
 }
 
@@ -41,7 +46,7 @@ class Orchestrator:
         result = orch.run("ogarnij inbox i pokaż co tam masz")
     """
 
-    def __init__(self, dry_run: bool = True):
+    def __init__(self, dry_run: bool = False):
         self.client = OpenAI(api_key=OPENAI_API_KEY)
         self.dry_run = dry_run
 
@@ -83,9 +88,11 @@ class Orchestrator:
                         "Jesteś routerem komend. Na podstawie polecenia użytkownika "
                         "zwróć TYLKO listę nazw agentów do wywołania, oddzielonych przecinkami.\n"
                         f"Dostępne agenty:\n{descriptions}\n\n"
-                        "Zasady: jeśli użytkownik chce przenieść/poprawić notatkę już zapisaną "
-                        "w 03_Knowledge (np. po filmie YT, zła kategoria) — użyj youtube, NIE inbox. "
-                        "inbox tylko gdy chodzi o pliki w 97_Inbox.\n"
+                        "Zasady:\n"
+                        "- inbox: TYLKO pliki w 97_Inbox, nigdy dla notatek już w vault\n"
+                        "- youtube: przenieś/popraw notatkę YT w 03_Knowledge lub transkrypcja\n"
+                        "- research: pytania o notatki w vaulcie, pytania ogólne, research z/bez zapisu\n"
+                        "- jeśli nie pasuje nic innego, użyj research\n"
                         "Odpowiedz TYLKO nazwami, np: inbox,todo\n"
                         "Jeśli agent jest oznaczony [wkrótce] - nie używaj go, "
                         "zamiast tego napisz: UNAVAILABLE"
@@ -103,9 +110,14 @@ class Orchestrator:
             raw = raw.replace("unavailable", "").strip(",").strip()
 
         if not raw:
-            return []
+            logger.warning("Router nie wskazał agenta — fallback: research")
+            return ["research"]
 
-        return [name.strip() for name in raw.split(",") if name.strip() in AGENT_DESCRIPTIONS]
+        agents = [name.strip() for name in raw.split(",") if name.strip() in AGENT_DESCRIPTIONS]
+        if not agents:
+            logger.warning("Router zwrócił nieznane nazwy ('%s') — fallback: research", raw)
+            return ["research"]
+        return agents
 
     def _run_agent(self, agent_name: str, task: str):
         """Inicjalizuje i uruchamia odpowiedni sub-agent."""

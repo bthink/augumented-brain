@@ -164,18 +164,32 @@ class YoutubeAgent(BaseAgent):
             case "get_yt_transcript":
                 return self._get_transcript(**tool_args)
             case "save_note":
+                category = tool_args.get("category")
+                if not category:
+                    return (
+                        f"BŁĄD: Brak wymaganego parametru 'category'. "
+                        f"Wywołaj save_note ponownie z category. "
+                        f"Dozwolone wartości: {', '.join(YT_CATEGORIES)}."
+                    )
                 return self._save_note(
                     tool_args["filename"],
                     tool_args["content"],
-                    tool_args["category"],
+                    category,
                     tool_args.get("folder"),
                 )
             case "read_knowledge_note":
                 return self._read_knowledge_note(tool_args["relative_path"])
             case "relocate_yt_note":
+                category = tool_args.get("category")
+                if not category:
+                    return (
+                        f"BŁĄD: Brak wymaganego parametru 'category'. "
+                        f"Wywołaj relocate_yt_note ponownie z category. "
+                        f"Dozwolone wartości: {', '.join(YT_CATEGORIES)}."
+                    )
                 return self._relocate_yt_note(
                     tool_args["relative_path"],
-                    tool_args["category"],
+                    category,
                     tool_args.get("folder"),
                 )
             case "ask_user":
