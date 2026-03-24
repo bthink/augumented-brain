@@ -13,6 +13,7 @@ import logging
 from openai import OpenAI
 
 from sub_agents.inbox_agent import InboxAgent
+from sub_agents.orphans_agent import OrphansAgent
 from sub_agents.research_agent import ResearchAgent
 from sub_agents.todo_agent import TodoAgent
 from sub_agents.youtube_agent import YoutubeAgent
@@ -33,7 +34,7 @@ AGENT_DESCRIPTIONS = {
         "prosi o research tematu, chce połączyć wiedzę z vaultu z informacjami z sieci. "
         "Agent może zapisać notatkę, ale nie musi — zależy od prośby."
     ),
-    "orphans": "Znajduje notatki bez linków — kandydaci do archiwum [wkrótce]",
+    "orphans": "Znajduje osierocone notatki (bez backlinków) i opcjonalnie przenosi je do 99_Archive.",
 }
 
 
@@ -49,6 +50,7 @@ class Orchestrator:
     def __init__(self, dry_run: bool = False):
         self.client = OpenAI(api_key=OPENAI_API_KEY)
         self.dry_run = dry_run
+        self.last_agent: str | None = None
 
     def run(self, user_input: str) -> str:
         """
@@ -67,6 +69,8 @@ class Orchestrator:
             results.append(f"### {agent_name}\n{result.output}")
             if not result.success:
                 print(f"⚠️  {agent_name} zakończył z błędem")
+            else:
+                self.last_agent = agent_name
 
         return "\n\n".join(results)
 
@@ -77,6 +81,14 @@ class Orchestrator:
         """
         descriptions = "\n".join(
             f"- {name}: {desc}" for name, desc in AGENT_DESCRIPTIONS.items()
+        )
+
+        last_agent_hint = (
+            f"\nOstatni użyty agent: {self.last_agent}. "
+            "Jeśli polecenie jest krótkie, kontynuuje poprzedni temat lub jest odpowiedzią "
+            "(np. 'tak', 'nie', 'ok', numer), użyj tego samego agenta."
+            if self.last_agent
+            else ""
         )
 
         response = self.client.chat.completions.create(
@@ -92,10 +104,11 @@ class Orchestrator:
                         "- inbox: TYLKO pliki w 97_Inbox, nigdy dla notatek już w vault\n"
                         "- youtube: przenieś/popraw notatkę YT w 03_Knowledge lub transkrypcja\n"
                         "- research: pytania o notatki w vaulcie, pytania ogólne, research z/bez zapisu\n"
+                        "- orphans: analiza osieroconych notatek i porządki archiwalne\n"
                         "- jeśli nie pasuje nic innego, użyj research\n"
                         "Odpowiedz TYLKO nazwami, np: inbox,todo\n"
-                        "Jeśli agent jest oznaczony [wkrótce] - nie używaj go, "
-                        "zamiast tego napisz: UNAVAILABLE"
+                        "Jeśli jakaś funkcja jest niedostępna, napisz: UNAVAILABLE"
+                        f"{last_agent_hint}"
                     ),
                 },
                 {"role": "user", "content": user_input},
@@ -110,11 +123,23 @@ class Orchestrator:
             raw = raw.replace("unavailable", "").strip(",").strip()
 
         if not raw:
+            if self.last_agent:
+                logger.warning(
+                    "Router nie wskazał agenta — fallback do ostatniego: %s", self.last_agent
+                )
+                return [self.last_agent]
             logger.warning("Router nie wskazał agenta — fallback: research")
             return ["research"]
 
         agents = [name.strip() for name in raw.split(",") if name.strip() in AGENT_DESCRIPTIONS]
         if not agents:
+            if self.last_agent:
+                logger.warning(
+                    "Router zwrócił nieznane nazwy ('%s') — fallback do ostatniego: %s",
+                    raw,
+                    self.last_agent,
+                )
+                return [self.last_agent]
             logger.warning("Router zwrócił nieznane nazwy ('%s') — fallback: research", raw)
             return ["research"]
         return agents
@@ -133,6 +158,9 @@ class Orchestrator:
                 return agent.run(task)
             case "research":
                 agent = ResearchAgent(client=self.client, dry_run=self.dry_run)
+                return agent.run(task)
+            case "orphans":
+                agent = OrphansAgent(client=self.client, dry_run=self.dry_run)
                 return agent.run(task)
             case _:
                 from agent.base_agent import AgentResult

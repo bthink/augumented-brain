@@ -196,19 +196,19 @@ def process_todo(dry_run: bool = True, todo_path: Path = TODO_FILE) -> None:
 
     expired = [t for t in done_with_dates if is_expired(t.done_date)]
 
-    print(f"\n📋 TODO: {len(active_tasks)} aktywnych | {len(done_tasks)} ukończonych | {len(expired)} do usunięcia (>{TODO_DONE_MAX_AGE_DAYS} dni)")
+    print(f"\n📋 TODO: {len(active_tasks)} aktywnych | {len(expired)} do usunięcia z sekcji Zrobione (>{TODO_DONE_MAX_AGE_DAYS} dni)")
 
     if not active_tasks:
         print("   Brak aktywnych zadań do grupowania.")
-        return
+        grouped = GroupedTasks([], [], [], [])
+    else:
+        print("\n🤖 Grupuję zadania przez OpenAI...")
+        grouped = group_tasks_with_ai([t.text for t in active_tasks])
 
-    print("\n🤖 Grupuję zadania przez OpenAI...")
-    grouped = group_tasks_with_ai([t.text for t in active_tasks])
-
-    print(f"\n   Do zrobienia od razu : {len(grouped.quick)}")
-    print(f"   Krótkie              : {len(grouped.short)}")
-    print(f"   Wymagają czasu       : {len(grouped.long)}")
-    print(f"   Czeka na coś         : {len(grouped.waiting)}")
+        print(f"\n   Do zrobienia od razu : {len(grouped.quick)}")
+        print(f"   Krótkie              : {len(grouped.short)}")
+        print(f"   Wymagają czasu       : {len(grouped.long)}")
+        print(f"   Czeka na coś         : {len(grouped.waiting)}")
 
     if dry_run:
         print("\n👁  DRY RUN — podgląd grupowania:\n")
@@ -291,6 +291,10 @@ def complete_task_by_text(query: str, todo_path: Path = TODO_FILE) -> tuple[list
 
     new_content = TASK_RE.sub(replace_task, content)
     todo_path.write_text(new_content, encoding="utf-8")
+
+    # Po oznaczeniu zadania jako ukończone od razu porządkujemy plik,
+    # aby wpis trafił do sekcji "## Zrobione".
+    process_todo(dry_run=False, todo_path=todo_path)
     return [target_text], 1
 
 

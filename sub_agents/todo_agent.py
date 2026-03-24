@@ -9,6 +9,8 @@ Narzędzia:
     - complete_task: oznacza zadanie jako ukończone
     - reorganize_todo: pełne przeliczenie i grupowanie przez AI
     - ask_user: pyta użytkownika o decyzję (gdy pasuje kilka zadań)
+    - execute_task: deleguje zadanie do odpowiedniego agenta (research/youtube),
+                    a po sukcesie oznacza je jako ukończone w TODO.md
 """
 
 import json
@@ -108,6 +110,38 @@ TODO_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "execute_task",
+            "description": (
+                "Deleguje zadanie TODO do wyspecjalizowanego agenta, który je wykona "
+                "(np. zrobi research i zapisze notatkę), a po sukcesie oznacza zadanie "
+                "jako ukończone w TODO.md. "
+                "Używaj gdy zadanie nadaje się do automatycznego wykonania przez AI, "
+                "np. 'sprawdź X', 'zbadaj Y', 'przeczytaj o Z'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_text": {
+                        "type": "string",
+                        "description": "Dokładna treść zadania z TODO.md, np. 'sprawdzić ograniczenia i płatności n8n'",
+                    },
+                    "agent_type": {
+                        "type": "string",
+                        "enum": ["research", "youtube"],
+                        "description": (
+                            "Który agent ma wykonać zadanie: "
+                            "'research' — wyszukanie informacji, analiza, notatka; "
+                            "'youtube' — transkrypcja i notatka z YouTube."
+                        ),
+                    },
+                },
+                "required": ["task_text", "agent_type"],
+            },
+        },
+    },
 ]
 
 
@@ -139,6 +173,8 @@ class TodoAgent(BaseAgent):
                 return self._reorganize_todo(tool_args.get("dry_run", False))
             case "ask_user":
                 return self.ask_user(tool_args["question"])
+            case "execute_task":
+                return self._execute_task(tool_args["task_text"], tool_args["agent_type"])
             case _:
                 return super().execute_tool(tool_name, tool_args)
 
@@ -167,10 +203,6 @@ class TodoAgent(BaseAgent):
 
         result = {
             "active": [t.text for t in active],
-            "done": [
-                {"text": t.text, "date": t.done_date}
-                for t in done
-            ],
             "total_active": len(active),
             "total_done": len(done),
         }
@@ -217,3 +249,44 @@ class TodoAgent(BaseAgent):
         except Exception as e:
             logger.error(f"Błąd reorganizacji TODO: {e}", exc_info=True)
             return f"BŁĄD podczas reorganizacji: {e}"
+
+    def _execute_task(self, task_text: str, agent_type: str) -> str:
+        """
+        Deleguje zadanie TODO do wyspecjalizowanego agenta.
+        Po udanym wykonaniu oznacza zadanie jako ukończone w TODO.md.
+        """
+        print(f"\n🔀 Deleguję zadanie do agenta '{agent_type}': {task_text}")
+
+        try:
+            result = self._run_delegate(task_text, agent_type)
+        except Exception as e:
+            logger.error("Błąd delegacji zadania '%s': %s", task_text, e, exc_info=True)
+            return f"BŁĄD podczas wykonywania zadania przez agenta '{agent_type}': {e}"
+
+        if not result.success:
+            return (
+                f"Agent '{agent_type}' nie ukończył zadania pomyślnie.\n"
+                f"Wynik: {result.output}\n"
+                "Zadanie NIE zostało oznaczone jako ukończone w TODO.md."
+            )
+
+        complete_summary = self._complete_task(task_text)
+        return (
+            f"✅ Zadanie wykonane przez agenta '{agent_type}'.\n\n"
+            f"{result.output}\n\n"
+            f"TODO: {complete_summary}"
+        )
+
+    def _run_delegate(self, task_text: str, agent_type: str) -> AgentResult:
+        """Inicjalizuje odpowiedniego agenta i uruchamia go z treścią zadania."""
+        match agent_type:
+            case "research":
+                from sub_agents.research_agent import ResearchAgent
+                agent = ResearchAgent(client=self.client, dry_run=self.dry_run)
+                return agent.run(task_text)
+            case "youtube":
+                from sub_agents.youtube_agent import YoutubeAgent
+                agent = YoutubeAgent(client=self.client, dry_run=self.dry_run)
+                return agent.run(task_text)
+            case _:
+                return AgentResult(success=False, output=f"Nieznany typ agenta: '{agent_type}'")
