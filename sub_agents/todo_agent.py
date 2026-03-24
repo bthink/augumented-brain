@@ -283,7 +283,9 @@ class TodoAgent(BaseAgent):
             case "research":
                 from sub_agents.research_agent import ResearchAgent
                 agent = ResearchAgent(client=self.client, dry_run=self.dry_run)
-                return agent.run(task_text)
+                return agent.run(
+                    f"{task_text}\n\nOBOWIĄZKOWO zapisz wynik jako notatkę przez save_research_note."
+                )
             case "youtube":
                 from sub_agents.youtube_agent import YoutubeAgent
                 agent = YoutubeAgent(client=self.client, dry_run=self.dry_run)
