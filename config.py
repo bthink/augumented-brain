@@ -28,7 +28,7 @@ FOLDERS = {
 
 # ── Pliki specjalne ──────────────────────────────────────────────────────────
 TODO_FILE      = VAULT_PATH / FOLDERS["system"] / "TODO.md"
-MEDIA_FILE     = VAULT_PATH / FOLDERS["ideas"]  / "Do obejrzenia i przeczytania.md"
+MEDIA_FILE     = VAULT_PATH / FOLDERS["system"] / "Do obejrzenia i przeczytania.md"
 ARCHIVE_FOLDER = VAULT_PATH / FOLDERS["archive"]
 
 # ── TODO settings ────────────────────────────────────────────────────────────

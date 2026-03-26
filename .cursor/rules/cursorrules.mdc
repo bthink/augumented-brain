@@ -160,6 +160,7 @@ logger.error(...)  # błąd operacji (exc_info=True)
 - Nie hardkoduj ścieżek do vaultu — zawsze `config.VAULT_PATH`
 - Nie modyfikuj `base_agent.py` dla logiki domenowej
 - Nie twórz nowych `OpenAI()` instancji w sub-agentach — używaj `self.client`
+- commity tylko po angielsku!
 - Nie commituj `.env`
 - Nie dodawaj do komunikatów commitów trailera `Made-with: Cursor` ani innych automatycznych oznaczeń narzędzia — sam opis zmian, bez „podpisu” edytora
 - Nie dodawaj LangGraph, LangChain ani innych frameworków agentowych bez wyraźnej decyzji
