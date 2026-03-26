@@ -106,8 +106,7 @@ class Orchestrator:
                         "- research: pytania o notatki w vaulcie, pytania ogólne, research z/bez zapisu\n"
                         "- orphans: analiza osieroconych notatek i porządki archiwalne\n"
                         "- jeśli nie pasuje nic innego, użyj research\n"
-                        "Odpowiedz TYLKO nazwami, np: inbox,todo\n"
-                        "Jeśli jakaś funkcja jest niedostępna, napisz: UNAVAILABLE"
+                        "Odpowiedz TYLKO nazwami, np: inbox,todo"
                         f"{last_agent_hint}"
                     ),
                 },
@@ -117,10 +116,6 @@ class Orchestrator:
         )
 
         raw = response.choices[0].message.content.strip().lower()
-
-        if "unavailable" in raw:
-            print("⚠️  Część funkcji jest jeszcze niedostępna")
-            raw = raw.replace("unavailable", "").strip(",").strip()
 
         if not raw:
             if self.last_agent:
