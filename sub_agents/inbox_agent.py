@@ -251,32 +251,65 @@ class InboxAgent(BaseAgent):
     def run(self, task: str = "") -> AgentResult:
         """Uruchamia agenta. Domyślne zadanie jeśli nie podano."""
         if not task:
-            task = (
-                f"Przejrzyj wszystkie notatki w 97_Inbox/. Dla każdej:\n"
-                f"1. Przeczytaj zawartość.\n"
-                f"2. Jeśli pusta lub bez wartości — usuń (delete_note).\n"
-                f"3. Sprawdź czy treść notatki zaczyna się od 'todo' (case-insensitive, może być 'todo:' lub 'todo '):\n"
-                f"   a. Wyciągnij treść zadania (usuń przedrostek 'todo' i opcjonalne dwukropki/spacje).\n"
-                f"   b. Wywołaj add_to_todo z tą treścią.\n"
-                f"   c. Usuń notatkę (delete_note).\n"
-                f"4. Sprawdź czy to notatka medialna — treść zaczyna się od 'film ', 'serial ',\n"
-                f"   'książka ', 'gra ', lub jest wyraźnym tytułem do obejrzenia/przeczytania:\n"
-                f"   a. Jeśli film lub serial — wyszukaj ocenę IMDB i gatunek przez search_web,\n"
-                f"      np. '[tytuł] IMDB rating genre'. Przeczytaj wynik przez read_webpage jeśli potrzeba.\n"
-                f"      Dla książek i gier NIE szukaj IMDB — podaj tylko gatunek jeśli go znasz.\n"
-                f"   b. Wywołaj save_to_watchlist z tytułem, typem i opisem.\n"
-                f"   c. Usuń notatkę (delete_note).\n"
-                f"5. Sprawdź czy notatka jest oznaczona jako ukończona:\n"
-                f"   - frontmatter zawiera 'status: done' lub 'status: ukończone'\n"
-                f"   - LUB treść zawiera tag #done lub #ukończone\n"
-                f"   Jeśli tak: zastosuj logikę ukończonych akcji z para_classifier (zasady 6-8):\n"
-                f"   - Akcja/sub-projekt powiązany z aktywnym obszarem ({', '.join(AREAS)}) → 02_Areas/<obszar>\n"
-                f"   - Samodzielny zakończony projekt bez aktywnego obszaru → 99_Archive\n"
-                f"6. Dla pozostałych notatek — klasyfikuj do folderu PARA i przenieś (move_note).\n"
-                f"7. Na końcu podsumuj co zrobiłeś.\n\n"
+            task = self._build_task()
+        result = super().run(task)
+
+        # Weryfikacja: sprawdź czy inbox jest faktycznie pusty po zakończeniu.
+        # Chroni przed pominięciem notatek (np. opóźnienie synchronizacji iCloud).
+        remaining = self._get_remaining_notes()
+        if remaining:
+            logger.warning(
+                "[InboxAgent] Po zakończeniu w inbox pozostało %d notatek: %s",
+                len(remaining),
+                remaining,
+            )
+            retry_task = (
+                f"W 97_Inbox/ nadal znajdują się nieprzetwrzone notatki: {remaining}.\n"
+                f"Przetwórz je tak samo jak poprzednie — przeczytaj, sklasyfikuj i wykonaj akcję.\n"
                 f"dry_run={self.dry_run}. Obszary: {', '.join(AREAS)}"
             )
-        return super().run(task)
+            retry_result = super().run(retry_task)
+            combined_output = f"{result.output}\n\n---\n⚠️ Retry (pominięte notatki):\n{retry_result.output}"
+            return AgentResult(
+                success=retry_result.success,
+                output=combined_output,
+                data={**result.data, **retry_result.data},
+            )
+
+        return result
+
+    def _build_task(self) -> str:
+        return (
+            f"Przejrzyj wszystkie notatki w 97_Inbox/. Dla każdej:\n"
+            f"1. Przeczytaj zawartość.\n"
+            f"2. Jeśli pusta lub bez wartości — usuń (delete_note).\n"
+            f"3. Sprawdź czy treść notatki zaczyna się od 'todo' (case-insensitive, może być 'todo:' lub 'todo '):\n"
+            f"   a. Wyciągnij treść zadania (usuń przedrostek 'todo' i opcjonalne dwukropki/spacje).\n"
+            f"   b. Wywołaj add_to_todo z tą treścią.\n"
+            f"   c. Usuń notatkę (delete_note).\n"
+            f"4. Sprawdź czy to notatka medialna — treść zaczyna się od 'film ', 'serial ',\n"
+            f"   'książka ', 'gra ', lub jest wyraźnym tytułem do obejrzenia/przeczytania:\n"
+            f"   a. Jeśli film lub serial — wyszukaj ocenę IMDB i gatunek przez search_web,\n"
+            f"      np. '[tytuł] IMDB rating genre'. Przeczytaj wynik przez read_webpage jeśli potrzeba.\n"
+            f"      Dla książek i gier NIE szukaj IMDB — podaj tylko gatunek jeśli go znasz.\n"
+            f"   b. Wywołaj save_to_watchlist z tytułem, typem i opisem.\n"
+            f"   c. Usuń notatkę (delete_note).\n"
+            f"5. Sprawdź czy notatka jest oznaczona jako ukończona:\n"
+            f"   - frontmatter zawiera 'status: done' lub 'status: ukończone'\n"
+            f"   - LUB treść zawiera tag #done lub #ukończone\n"
+            f"   Jeśli tak: zastosuj logikę ukończonych akcji z para_classifier (zasady 6-8):\n"
+            f"   - Akcja/sub-projekt powiązany z aktywnym obszarem ({', '.join(AREAS)}) → 02_Areas/<obszar>\n"
+            f"   - Samodzielny zakończony projekt bez aktywnego obszaru → 99_Archive\n"
+            f"6. Dla pozostałych notatek — klasyfikuj do folderu PARA i przenieś (move_note).\n"
+            f"7. Na końcu podsumuj co zrobiłeś.\n\n"
+            f"dry_run={self.dry_run}. Obszary: {', '.join(AREAS)}"
+        )
+
+    def _get_remaining_notes(self) -> list[str]:
+        """Zwraca listę plików .md pozostałych w inbox po zakończeniu agenta."""
+        if not self.inbox_path.exists():
+            return []
+        return [f.name for f in self.inbox_path.iterdir() if f.suffix == ".md"]
 
     # ------------------------------------------------------------------
     # Implementacje narzędzi
