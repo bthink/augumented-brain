@@ -178,13 +178,15 @@ class TodoAgent(BaseAgent):
             case _:
                 return super().execute_tool(tool_name, tool_args)
 
+    _REORGANIZE_KEYWORDS = ("ogarnij", "przeorganizuj", "posortuj", "uporządkuj")
+
     def run(self, task: str = "") -> AgentResult:
-        if not task:
-            task = (
-                "Przeorganizuj TODO.md: pogrupuj aktywne zadania, "
-                "zarchiwizuj stare ukończone.\n"
-                f"dry_run={self.dry_run}"
+        if not task or any(kw in task.lower() for kw in self._REORGANIZE_KEYWORDS):
+            reorganize_prefix = (
+                "Wywołaj reorganize_todo (dry_run=False) żeby przenieść ukończone zadania [x] "
+                "do sekcji ## Zrobione i pogrupować aktywne.\n"
             )
+            task = reorganize_prefix + (f"Następnie obsłuż: {task}" if task else "Następnie zakończ.")
         return super().run(task)
 
     # ------------------------------------------------------------------

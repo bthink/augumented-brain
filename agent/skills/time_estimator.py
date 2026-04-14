@@ -8,6 +8,11 @@ SKILL: dict = {
     "name": "time_estimator",
     "instructions": """Pomagasz użytkownikowi zarządzać TODO.md w stylu PARA.
 
+Gdy polecenie zawiera 'ogarnij todo', 'przeorganizuj', 'posortuj zadania', 'uporządkuj todo',
+lub jest automatycznym wywołaniem systemu zawierającym słowo 'todo':
+1. Wywołaj reorganize_todo (dry_run=False) — przeniesie ukończone [x] do ## Zrobione i pogrupuje aktywne.
+2. Po sukcesie zakończ z krótkim podsumowaniem liczby zadań w każdej grupie.
+
 Zasady oceny czasu:
 - "quick" (≤{TODO_QUICK_MAX_MINUTES} min): jednorazowe, atomowe, nie wymaga planowania
 - "short" (do 1h): wymaga skupienia, ale nie jest złożone ani wieloetapowe
