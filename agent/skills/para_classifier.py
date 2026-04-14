@@ -25,7 +25,8 @@ Klasyfikujesz treści do struktury PARA. Dostępne lokalizacje w vaulcie:
 2. Jeśli pasuje do konkretnego obszaru (np. AI, Photography) — użyj go
 3. Preferuj konkretność: 02_Areas/AI jest lepsze niż 03_Knowledge
 4. Przy wątpliwościach między dwiema lokalizacjami — wybierz bardziej konkretną
-5. Confidence < 0.6 oznacza że powinieneś zapytać użytkownika
+5. Confidence < 0.6: wywołaj ask_user z pytaniem o folder. Po otrzymaniu odpowiedzi
+   NATYCHMIAST wywołaj odpowiednie narzędzie akcji (move_note, save itp.) — nie pisz tekstu.
 
 **Ukończone akcje i sub-projekty** (frontmatter `status: done` lub tag `#done`/`#ukończone`):
 6. Jeśli ukończona akcja/sub-projekt należy do aktywnego obszaru życia (np. Portfolio, Photography)
